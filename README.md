@@ -1,123 +1,161 @@
 # Deutsche Gesellschaftsstudie
 
-Anonymous survey on demographics, politics, attitudes, and living conditions in Germany.
+An open-source, anonymous survey on demographics, political attitudes, and living
+conditions in Germany — 157 questions across 17 thematic sections.
 
-**Domain:** `survey.muehrke.de`  
-**Stack:** React · FastAPI · Apache · systemd  
-**Questions:** 157 in 17 sections  
-
----
-
-## Architecture
-
-```
-Browser / iPhone
-      │  HTTPS
-      ▼
-Apache (survey.muehrke.de)
-  ├── /api/survey      → POST only → uvicorn 127.0.0.1:8742
-  ├── /api/newsletter  → POST only → uvicorn 127.0.0.1:8742
-  ├── /health          → localhost only
-  ├── /results         → public aggregated results dashboard
-  └── /admin           → localhost + Tailscale only (token-protected)
-      ▼
-uvicorn / FastAPI  (server.py)
-  ├── Survey data     os.open("x", 0o600)
-  │   └── /var/data/survey/YYYY-MM/YYYYMMDDTHHMMSSZ_{id}.json
-  └── Newsletter      hybrid RSA-4096 + AES-256-GCM
-      └── /var/data/newsletter/subscribers.ndjson
-```
+**Live:** [survey.muehrke.de](https://survey.muehrke.de)
 
 ---
 
-## Repository Layout
+## What this is
+
+A self-hosted survey platform built for scientific data collection. All responses
+are anonymous from the ground up — no IP addresses, no accounts, no tracking.
+Collected data will be published on [Zenodo](https://zenodo.org) under CC BY 4.0
+once a sufficient number of responses has been gathered.
+
+The survey covers:
+- Sociodemographics (age, education, income, housing)
+- Family & household structure
+- Political orientation, voting behaviour, party competence
+- Trust in institutions and democracy satisfaction
+- Energy, mobility, and geopolitics
+- Religion, migration background, legal experiences
+- Life satisfaction and social connectedness
+
+---
+
+## Features
+
+- **157 questions · 17 sections** — including skip logic (20+ rules), Likert scales,
+  sliders, multi-select, and free-text fields
+- **Multilingual** — German complete; English, Turkish, Ukrainian, Polish in progress
+- **Schema-hash validation** — client and server agree on the question set before
+  any data is written to disk
+- **Hardened backend** — rate limiting, depth-limited JSON parsing, append-only
+  filesystem, systemd sandboxing, no root privileges
+- **Encrypted newsletter** — subscriber e-mails stored with RSA-4096 + AES-256-GCM;
+  the server process only holds the public key
+- **Admin dashboard** — token-protected, accessible via localhost or Tailscale only;
+  live aggregates, question browser, export
+- **Public results page** — k-anonymized aggregates at `/results`; regional breakdowns
+  only for Bundesländer with ≥ 50 submissions
+- **Scientific export** — k-anonymous JSON dataset (free-text and postal codes
+  excluded, timestamps rounded to month)
+
+---
+
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18 + Vite (also runs as a claude.ai Artifact) |
+| Backend | FastAPI · uvicorn · Python 3.11+ |
+| Reverse proxy | Apache 2.4 (mod_proxy, mod_ssl, mod_rewrite) |
+| Crypto | `cryptography` — RSA-4096-OAEP + AES-256-GCM |
+| Process | systemd with full sandboxing |
+| TLS | Let's Encrypt via certbot |
+
+---
+
+## Repository layout
 
 ```
-src/survey/umfrage.jsx              React frontend (157 questions, i18n, skip logic, tooltips)
-src/survey/umfrage_struktur.json    Machine-readable question schema
-src/server/server.py                FastAPI backend (hardened, encrypted newsletter)
-src/server/aggregator.py            Data aggregation + k-anonymity export
-src/server/newsletter_keygen.py     RSA-4096 keypair generation (run once)
-src/server/newsletter_decrypt.py    Decrypt newsletter addresses
-src/server/requirements.txt         Python dependencies
-src/admin/index.html                Admin dashboard (token-protected, local only)
-src/results/index.html              Public aggregated results page
-deploy/umfrage-server.service       Systemd unit with hardening
-deploy/survey.muehrke.de.conf       Apache HTTP → HTTPS redirect
-deploy/survey.muehrke.de-le-ssl.conf Apache HTTPS + proxy
+src/
+  survey/
+    umfrage.jsx              React frontend (questions, skip logic, i18n, storage adapter)
+    umfrage_struktur.json    Machine-readable question schema
+  server/
+    server.py                FastAPI backend
+    aggregator.py            Data aggregation + k-anonymity export
+    newsletter_keygen.py     One-time RSA keypair generation
+    newsletter_decrypt.py    Decrypt newsletter subscribers (newsletter user only)
+    requirements.txt
+  admin/
+    index.html               Admin dashboard (self-contained, Chart.js)
+  results/
+    index.html               Public results page (self-contained, Chart.js)
+deploy/
+  umfrage-server.service     Systemd unit with hardening
+  survey.muehrke.de.conf     Apache HTTP → HTTPS redirect
+  survey.muehrke.de-le-ssl.conf  Apache HTTPS + reverse proxy
 ```
 
 ---
 
-## Prerequisites
+## Privacy & data
 
-- Debian 12 / Ubuntu 22.04 LTS (tested on Raspberry Pi)
-- Python 3.11+
-- Node ≥ 20 (for frontend build)
-- Apache2 with mod_proxy, mod_headers, mod_ssl, mod_rewrite
-- certbot (Let's Encrypt)
-- systemd
+- **Fully anonymous** — no IP addresses, names, or session identifiers are stored
+- **Newsletter addresses** are encrypted on write and stored separately from survey
+  responses; no link between a submission and an e-mail address exists
+- **Publication** will exclude free-text fields (Q052, Q064) and postal codes (Q121);
+  regional breakdowns are suppressed below the 50-submission threshold
+- All published texts use the wording:
+  > "Diese Umfrage ist anonym. Es werden keine personenbezogenen Daten erhoben."
 
 ---
 
-## 1 · Users and Directories
+## Self-hosting
+
+> Full step-by-step instructions are in the sections below.
+
+**Quick overview:**
+
+1. Create system users (`umfrage`, `newsletter`) and data directories
+2. Deploy the Python venv and copy `server.py` + `aggregator.py`
+3. Generate the newsletter RSA keypair (once, as the `newsletter` user)
+4. Generate an admin token and set it as `ADMIN_TOKEN` in the systemd unit
+5. Enable the systemd service
+6. Configure Apache with the provided vhost configs and obtain a TLS certificate
+7. Build the React frontend with Vite and deploy to `/var/www/survey/`
+8. Copy `src/admin/index.html` and `src/results/index.html` to
+   `/opt/survey-server/admin/` and `/opt/survey-server/results/`
+
+<details>
+<summary>1 · Users and directories</summary>
 
 ```bash
-# Survey user (runs the server process)
 sudo useradd -r -s /sbin/nologin -d /opt/survey-server umfrage
-
-# Newsletter user (only one who can decrypt)
 sudo useradd -r -m -s /bin/bash newsletter
 
-# Directories
 sudo mkdir -p /opt/survey-server /var/data/survey /var/data/newsletter /etc/survey
 
-# Survey data path
-sudo chown umfrage:umfrage /var/data/survey
-sudo chmod 700 /var/data/survey
-sudo chattr +a /var/data/survey        # append-only: deletion not possible
-lsattr -d /var/data/survey            # check: -----a--------e----
+sudo chown umfrage:umfrage /var/data/survey && sudo chmod 700 /var/data/survey
+sudo chattr +a /var/data/survey        # append-only
 
-# Newsletter directory: umfrage can write but not read
-sudo chown newsletter:newsletter /var/data/newsletter
-sudo chmod 730 /var/data/newsletter
-sudo usermod -aG newsletter umfrage   # umfrage joins newsletter group
+sudo chown newsletter:newsletter /var/data/newsletter && sudo chmod 730 /var/data/newsletter
+sudo usermod -aG newsletter umfrage
 
-# Code directory
-sudo chown -R root:umfrage /opt/survey-server
-sudo chmod 750 /opt/survey-server
+sudo chown -R root:umfrage /opt/survey-server && sudo chmod 750 /opt/survey-server
 ```
+</details>
 
----
-
-## 2 · Python Environment
+<details>
+<summary>2 · Python environment</summary>
 
 ```bash
 sudo python3 -m venv /opt/survey-server/venv
-sudo /opt/survey-server/venv/bin/pip install \
-    fastapi "uvicorn[standard]" cryptography
+sudo /opt/survey-server/venv/bin/pip install fastapi "uvicorn[standard]" cryptography
 
 sudo cp src/server/server.py src/server/aggregator.py /opt/survey-server/
 sudo chmod 440 /opt/survey-server/server.py
 sudo chown root:umfrage /opt/survey-server/server.py /opt/survey-server/aggregator.py
 ```
+</details>
 
----
-
-## 3 · Newsletter Keypair (once)
+<details>
+<summary>3 · Newsletter keypair (once)</summary>
 
 ```bash
 sudo cp src/server/newsletter_keygen.py /home/newsletter/
 sudo -u newsletter python3 /home/newsletter/newsletter_keygen.py
-# → /home/newsletter/private/newsletter_priv.pem  (chmod 600)
-# → /etc/survey/newsletter_pub.pem                (chmod 644)
+# → /home/newsletter/private/newsletter_priv.pem  (chmod 600, newsletter user only)
+# → /etc/survey/newsletter_pub.pem                (chmod 644, server reads on startup)
 ```
+</details>
 
----
-
-## 4 · Admin Token
-
-Generate a random token and add it to the systemd service:
+<details>
+<summary>4 · Admin token</summary>
 
 ```bash
 python3 -c "import secrets; print(secrets.token_hex(32))"
@@ -126,69 +164,51 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 Add to `/etc/systemd/system/umfrage-server.service`:
 
 ```ini
-Environment=ADMIN_TOKEN=<paste-token-here>
+Environment=ADMIN_TOKEN=<token>
 ```
 
-The admin dashboard at `/admin` requires this token. It is only reachable from
-`127.0.0.1` and Tailscale (`100.x.x.x`) at both the Apache and application layer.
+The admin dashboard at `/admin` accepts this token and is reachable only from
+`127.0.0.1` and Tailscale (`100.x.x.x`) — enforced at both Apache and application level.
+</details>
 
----
-
-## 5 · Systemd Service
+<details>
+<summary>5 · Systemd service</summary>
 
 ```bash
 sudo cp deploy/umfrage-server.service /etc/systemd/system/
-
-# Edit to set your values:
-#   SURVEY_DATA_DIR=/var/data/survey
-#   SURVEY_ALLOWED_ORIGINS=https://survey.muehrke.de
-#   NEWSLETTER_PUBKEY=/etc/survey/newsletter_pub.pem
-#   ADMIN_TOKEN=<generated-above>
+# Set SURVEY_DATA_DIR, SURVEY_ALLOWED_ORIGINS, NEWSLETTER_PUBKEY, ADMIN_TOKEN
 sudo nano /etc/systemd/system/umfrage-server.service
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now umfrage-server
-sudo systemctl status umfrage-server
-
-# Expected startup line:
-# Schema-Hash: acffb1411db2fd29...  (157 Fragen)
 ```
+</details>
 
----
-
-## 6 · Apache
+<details>
+<summary>6 · Apache</summary>
 
 ```bash
 sudo a2enmod proxy proxy_http headers ssl rewrite
-
-sudo cp deploy/survey.muehrke.de.conf /etc/apache2/sites-available/
-sudo cp deploy/survey.muehrke.de-le-ssl.conf /etc/apache2/sites-available/
-
+sudo cp deploy/survey.muehrke.de.conf deploy/survey.muehrke.de-le-ssl.conf \
+    /etc/apache2/sites-available/
 sudo a2ensite survey.muehrke.de
 sudo apache2ctl configtest && sudo systemctl reload apache2
-
 sudo certbot --apache -d survey.muehrke.de
-
 sudo a2ensite survey.muehrke.de-le-ssl
 sudo apache2ctl configtest && sudo systemctl reload apache2
 ```
+</details>
 
----
-
-## 7 · Frontend Build
+<details>
+<summary>7 · Frontend build</summary>
 
 ```bash
-nvm install 20 && nvm use 20
-
 cd src/survey
 npm create vite@latest survey-frontend -- --template react
 cp umfrage.jsx survey-frontend/src/App.jsx
-cd survey-frontend
-npm install && npm run build
-
+cd survey-frontend && npm install && npm run build
 sudo mkdir -p /var/www/survey
-sudo cp -r dist/* /var/www/survey/
-sudo chown -R www-data:www-data /var/www/survey
+sudo cp -r dist/* /var/www/survey/ && sudo chown -R www-data:www-data /var/www/survey
 ```
 
 Add to `deploy/survey.muehrke.de-le-ssl.conf`:
@@ -202,193 +222,98 @@ DocumentRoot /var/www/survey
     FallbackResource /index.html
 </Directory>
 ```
+</details>
 
----
-
-## 8 · Dashboard Pages
+<details>
+<summary>8 · Dashboard pages</summary>
 
 ```bash
-# Deploy admin and results dashboard HTML files
 sudo mkdir -p /opt/survey-server/admin /opt/survey-server/results
 sudo cp src/admin/index.html /opt/survey-server/admin/
 sudo cp src/results/index.html /opt/survey-server/results/
 sudo chown -R root:umfrage /opt/survey-server/admin /opt/survey-server/results
 sudo chmod 640 /opt/survey-server/admin/index.html /opt/survey-server/results/index.html
-
-# Admin dashboard (localhost / Tailscale only):
-#   https://survey.muehrke.de/admin  →  enter token from ADMIN_TOKEN env var
-# Public results page:
-#   https://survey.muehrke.de/results
 ```
+</details>
 
----
-
-## 9 · CORS
-
-```ini
-# Own domain only:
-Environment=SURVEY_ALLOWED_ORIGINS=https://survey.muehrke.de
-```
+<details>
+<summary>9 · Testing</summary>
 
 ```bash
-sudo systemctl daemon-reload && sudo systemctl restart umfrage-server
-```
-
----
-
-## 10 · Testing
-
-```bash
-# Health check (localhost only)
 curl http://localhost:8742/health
-# → {"status":"ok","submissions":0,"by_month":{},...}
 
-# Correct test submission
 HASH="acffb1411db2fd29f364346686654a3357a3700d9b1229d96495b49678a4146f"
 curl -X POST https://survey.muehrke.de/api/survey \
   -H "Content-Type: application/json" \
   -d "{\"id\":\"test001\",\"schema_hash\":\"$HASH\",\"responses\":{}}"
 # → {"status":"ok"}
 
-# Admin stats (requires token)
-curl http://localhost:8742/admin/api/stats \
-  -H "X-Admin-Token: <your-token>"
-
-# Public results
+curl http://localhost:8742/admin/api/stats -H "X-Admin-Token: <token>"
 curl http://localhost:8742/results/api/stats
 
-# Clean up test file
+# Clean up
 sudo chattr -a /var/data/survey
 sudo find /var/data/survey -name "*test001*" -delete
 sudo chattr +a /var/data/survey
 ```
+</details>
 
----
-
-## 11 · Newsletter Management
+<details>
+<summary>10 · Newsletter management</summary>
 
 ```bash
 sudo cp src/server/newsletter_decrypt.py /home/newsletter/
 sudo chown newsletter:newsletter /home/newsletter/newsletter_decrypt.py
 sudo chmod 700 /home/newsletter/newsletter_decrypt.py
 
-sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py          # all
-sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --csv    # CSV export
-sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --count  # count only
+sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py           # list all
+sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --csv     # CSV export
+sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --count   # count only
 sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --since 2025-05
 ```
+</details>
 
----
+<details>
+<summary>11 · Adding questions</summary>
 
-## 12 · Data Export (Scientific)
-
-The admin dashboard (`/admin`) provides a **Scientific Dataset** export button.
-The dataset is k-anonymized:
-
-- Free-text answers (Q052, Q064) and postal codes (Q121) are excluded
-- Regional breakdowns only for Bundesländer with **≥ 50 submissions**
-- Suppressed regions contribute to national totals but are not listed individually
-- Timestamps are rounded to `YYYY-MM`
-
-For manual export:
-
-```bash
-curl http://localhost:8742/admin/api/export \
-  -H "X-Admin-Token: <your-token>" \
-  > export_$(date +%Y%m%d).json
-```
-
----
-
-## 13 · Schema Updates (Adding Questions)
-
-1. Add question to `umfrage.jsx` → SECTIONS (new ID e.g. Q158)
-2. Recalculate hash:
+1. Add question to `SECTIONS` in `umfrage.jsx`
+2. Recalculate schema hash:
    ```bash
    python3 -c "
    import hashlib, json
-   ids = sorted([f'Q{i:03d}' for i in range(1, 159)])
+   ids = sorted([f'Q{i:03d}' for i in range(1, 159)])  # adjust range
    print(hashlib.sha256(json.dumps(ids, separators=(',',':')).encode()).hexdigest())
    "
    ```
 3. Update `SCHEMA_HASH` in `umfrage.jsx`
-4. In `server.py`: add to `VALID_QUESTION_IDS` and `QUESTION_TYPES`
+4. Add to `VALID_QUESTION_IDS` and `QUESTION_TYPES` in `server.py`
 
 | Survey type | Server type |
 |---|---|
-| `radio`, `text`, `party_single`, `plz` | `str` |
-| `check`, `party_multi` | `list` |
+| `radio`, `text`, `plz` | `str` |
+| `check` | `list` |
 | `likert5` | `int1-5` |
 | `slider7` | `int1-7` |
 | `scale10` | `int0-10` |
 | `number` | `int` |
+</details>
 
 ---
 
-## 14 · Monthly Rotation (cron)
-
-```bash
-# /etc/cron.d/survey-freeze
-5 0 1 * * root chattr +a /var/data/survey/$(date -d "last month" +\%Y-\%m) 2>/dev/null || true
-```
-
----
-
-## 15 · Maintenance
-
-```bash
-# Update server
-scp src/server/server.py src/server/aggregator.py pi@muehrke.de:/tmp/
-sudo cp /tmp/server.py /tmp/aggregator.py /opt/survey-server/
-sudo chmod 440 /opt/survey-server/server.py
-sudo chown root:umfrage /opt/survey-server/server.py /opt/survey-server/aggregator.py
-sudo systemctl restart umfrage-server
-
-# Update dashboard HTML
-sudo cp src/admin/index.html /opt/survey-server/admin/
-sudo cp src/results/index.html /opt/survey-server/results/
-
-# Rebuild frontend
-npm run build && sudo cp -r dist/* /var/www/survey/
-sudo chown -R www-data:www-data /var/www/survey
-
-# Log rotation
-journalctl --vacuum-time=30d
-
-# Verify append-only flags
-lsattr -d /var/data/survey && lsattr -d /var/data/survey/*/
-
-# TLS renewal (certbot handles automatically)
-sudo certbot renew --dry-run
-```
-
----
-
-## Security Overview
+## Security
 
 | Layer | Measure |
 |-------|---------|
 | Network | HTTPS only |
-| Proxy | Apache sets `X-Forwarded-For: %{REMOTE_ADDR}` — no spoofing |
-| Application | Rate limiting, schema hash, value validation, JSON depth limit |
-| Admin | IP restriction (localhost + Tailscale) + secret token (HMAC compare) |
-| Filesystem | `chattr +a` (append-only), `chmod 700`, file mode `0o600` |
-| Newsletter | RSA-4096 + AES-256-GCM, public-key-only in server process |
-| Process | Dedicated user `umfrage` without login shell |
-| Systemd | `NoNewPrivileges`, `MemoryDenyWriteExecute`, `SystemCallFilter`, `PrivateDevices`, `CapabilityBoundingSet=`, `UMask=0077` |
-| Duplicates | `open("x")` atomic + `rglob` check |
-| Data | No IP addresses, no tracking — responses + timestamp only |
+| Proxy | Apache sets `X-Forwarded-For: %{REMOTE_ADDR}` — no header spoofing |
+| Application | Rate limiting, schema-hash validation, value validation, JSON depth limit |
+| Admin | IP restriction (localhost + Tailscale) + HMAC-safe token comparison |
+| Filesystem | `chattr +a` (append-only), `chmod 700`, `O_CREAT\|O_EXCL` file creation |
+| Newsletter | RSA-4096-OAEP + AES-256-GCM; server process holds public key only |
+| Systemd | `NoNewPrivileges`, `MemoryDenyWriteExecute`, `SystemCallFilter`, `CapabilityBoundingSet=` |
 
 ---
 
-## Privacy
+## License
 
-**This survey is anonymous — not anonymized.**
-
-No IP addresses, names, or accounts are collected. The survey is anonymous from the
-start. All published texts must state:
-
-> "Diese Umfrage ist anonym. Es werden keine personenbezogenen Daten erhoben."
-
-Newsletter e-mail addresses are personal data and are stored **strictly separate**
-from survey responses — no survey ID is linked to an e-mail address.
+[MIT](LICENSE) — data will be published under CC BY 4.0 on Zenodo.
