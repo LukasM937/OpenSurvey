@@ -26,7 +26,7 @@ const storage = (() => {
 // Muss mit SCHEMA_HASH im server.py übereinstimmen.
 // Neu berechnen wenn Fragen hinzugefügt/entfernt werden:
 //   python3 -c "import hashlib,json; ids=sorted(['Q001',...,'Q108']); print(hashlib.sha256(json.dumps(ids,separators=(',',':')).encode()).hexdigest())"
-const SCHEMA_HASH = "b659a728a1147f0f2ea35727ac21fab2046f92c36be751eb594e5f6ad762615f";
+const SCHEMA_HASH = "acffb1411db2fd29f364346686654a3357a3700d9b1229d96495b49678a4146f";
 
 // Normalisiert alle Felder vor dem Senden:
 // - Übersprungene Fragen  → "__skipped__"  (wird server-seitig nicht als Antwort gezählt)
