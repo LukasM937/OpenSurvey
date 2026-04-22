@@ -9,6 +9,7 @@ Neu in v4:
 """
 
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -20,9 +21,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 # ── Konfiguration ─────────────────────────────────────────────
 
@@ -33,11 +34,21 @@ MAX_FILES       = int(os.getenv("SURVEY_MAX_FILES",       "50000"))
 MIN_FREE_MB     = int(os.getenv("SURVEY_MIN_FREE_MB",     "200"))
 RATE_LIMIT_REQ  = int(os.getenv("SURVEY_RATE_LIMIT_REQ",  "5"))
 RATE_LIMIT_WIN  = int(os.getenv("SURVEY_RATE_LIMIT_WIN",  "60"))
-ALLOWED_ORIGINS = os.getenv("SURVEY_ALLOWED_ORIGINS",     "*").split(",")
+ALLOWED_ORIGINS  = os.getenv("SURVEY_ALLOWED_ORIGINS",     "*").split(",")
+ADMIN_TOKEN      = os.getenv("ADMIN_TOKEN",                "")
+STATIC_DIR       = Path(os.getenv("STATIC_DIR", str(Path(__file__).parent))).resolve()
+NEWSLETTER_FILE  = Path(os.getenv("NEWSLETTER_DATA_FILE",
+                   "/var/data/newsletter/subscribers.ndjson"))
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("umfrage")
+
+try:
+    import aggregator as _aggregator
+except ImportError:
+    _aggregator = None  # type: ignore
+    log.warning("aggregator.py not found – /admin and /results endpoints disabled")
 
 # ── [F] Kanonisches Schema ─────────────────────────────────────
 #
@@ -359,3 +370,93 @@ async def health(request: Request) -> JSONResponse:
         "disk_used_mb": usage.used  // 1_048_576,
         "schema_hash":  SCHEMA_HASH,
     })
+
+
+# ── Admin helpers ─────────────────────────────────────────────
+
+def _is_local(ip: str) -> bool:
+    """True for localhost and Tailscale IPs (100.x.x.x)."""
+    return ip in ("127.0.0.1", "::1") or ip.startswith("100.")
+
+def _verify_admin(token: str) -> None:
+    if not ADMIN_TOKEN:
+        raise HTTPException(503, "Admin nicht konfiguriert (ADMIN_TOKEN nicht gesetzt)")
+    if not hmac.compare_digest(token or "", ADMIN_TOKEN):
+        raise HTTPException(401, "Ungültiger Admin-Token")
+
+def _newsletter_count() -> int:
+    try:
+        return sum(1 for ln in NEWSLETTER_FILE.read_text().splitlines() if ln.strip())
+    except Exception:
+        return -1
+
+
+# ── Admin endpoints ───────────────────────────────────────────
+
+@app.get("/admin")
+@app.get("/admin/")
+async def admin_page(request: Request) -> FileResponse:
+    if not _is_local(get_ip(request)):
+        raise HTTPException(404)
+    html = STATIC_DIR / "admin" / "index.html"
+    if not html.exists():
+        raise HTTPException(404, "Admin-Dashboard nicht deployt (admin/index.html fehlt)")
+    return FileResponse(html, media_type="text/html")
+
+
+@app.get("/admin/api/stats")
+async def admin_stats(
+    request: Request,
+    x_admin_token: str = Header(default=""),
+) -> JSONResponse:
+    if not _is_local(get_ip(request)):
+        raise HTTPException(404)
+    _verify_admin(x_admin_token)
+    if _aggregator is None:
+        raise HTTPException(503, "aggregator.py nicht verfügbar")
+    stats = _aggregator.get_admin_stats(DATA_DIR)
+    return JSONResponse({**stats, "newsletter_count": _newsletter_count()})
+
+
+@app.get("/admin/api/export")
+async def admin_export(
+    request: Request,
+    x_admin_token: str = Header(default=""),
+) -> JSONResponse:
+    if not _is_local(get_ip(request)):
+        raise HTTPException(404)
+    _verify_admin(x_admin_token)
+    if _aggregator is None:
+        raise HTTPException(503, "aggregator.py nicht verfügbar")
+    return JSONResponse(_aggregator.get_export_dataset(DATA_DIR))
+
+
+@app.post("/admin/api/invalidate-cache")
+async def admin_invalidate_cache(
+    request: Request,
+    x_admin_token: str = Header(default=""),
+) -> JSONResponse:
+    if not _is_local(get_ip(request)):
+        raise HTTPException(404)
+    _verify_admin(x_admin_token)
+    if _aggregator:
+        _aggregator.invalidate_cache()
+    return JSONResponse({"status": "ok"})
+
+
+# ── Public results endpoints ──────────────────────────────────
+
+@app.get("/results")
+@app.get("/results/")
+async def results_page() -> FileResponse:
+    html = STATIC_DIR / "results" / "index.html"
+    if not html.exists():
+        raise HTTPException(404, "Results-Seite nicht deployt (results/index.html fehlt)")
+    return FileResponse(html, media_type="text/html")
+
+
+@app.get("/results/api/stats")
+async def results_stats() -> JSONResponse:
+    if _aggregator is None:
+        raise HTTPException(503, "aggregator.py nicht verfügbar")
+    return JSONResponse(_aggregator.get_public_stats(DATA_DIR))

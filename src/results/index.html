@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ergebnisse – Deutsche Gesellschaftsstudie</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f6fa; --surface: #fff; --border: #e2e4ec;
+    --text: #1a1d2e; --muted: #6b7280; --accent: #2563eb;
+  }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  .page-header { background: var(--accent); color: #fff; padding: 2rem 1.5rem; text-align: center; }
+  .page-header h1 { font-size: 1.6rem; font-weight: 700; }
+  .page-header p  { margin-top: .5rem; opacity: .85; font-size: .95rem; }
+
+  .hero { display: flex; gap: 1rem; justify-content: center; padding: 1.5rem;
+          flex-wrap: wrap; }
+  .hero-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+               padding: 1.25rem 2rem; text-align: center; min-width: 140px; }
+  .hero-val  { font-size: 2.5rem; font-weight: 800; color: var(--accent); }
+  .hero-lbl  { color: var(--muted); font-size: .8rem; margin-top: .25rem; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 0 1.25rem 2rem; }
+
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+             padding: 1.25rem; margin-bottom: 1rem; }
+  .section h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem;
+                padding-bottom: .5rem; border-bottom: 1px solid var(--border); }
+  .section .subtitle { color: var(--muted); font-size: .8rem; margin-top: -.5rem; margin-bottom: .75rem; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+  @media (max-width: 640px) { .two-col, .three-col { grid-template-columns: 1fr; } }
+
+  canvas { max-height: 300px; }
+
+  /* Bundesland grid */
+  .bl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: .5rem; }
+  .bl-card { border: 1px solid var(--border); border-radius: 6px; padding: .6rem .75rem; font-size: 13px; }
+  .bl-card.ok    { border-color: #86efac; background: #f0fdf4; }
+  .bl-card.none  { border-color: #fca5a5; background: #fef2f2; color: var(--muted); }
+  .bl-name { font-weight: 500; }
+  .bl-n    { font-size: 12px; color: var(--muted); }
+
+  .disclaimer { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
+                padding: 1rem 1.25rem; font-size: 13px; color: #78350f; margin-bottom: 1rem; }
+  .disclaimer strong { display: block; margin-bottom: .25rem; }
+
+  #loading { text-align: center; padding: 3rem; color: var(--muted); }
+  #error   { text-align: center; padding: 2rem; color: #dc2626; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Deutsche Gesellschaftsstudie</h1>
+  <p>Aggregierte Ergebnisse · Kontinuierlich aktualisiert</p>
+</div>
+
+<div id="loading">Lade Daten…</div>
+<div id="error" style="display:none"></div>
+
+<div id="content" style="display:none">
+  <div class="hero">
+    <div class="hero-card">
+      <div class="hero-val" id="h-total">–</div>
+      <div class="hero-lbl">Teilnehmende</div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-val" id="h-regions">–</div>
+      <div class="hero-lbl">Bundesländer mit Daten</div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-val" id="h-months">–</div>
+      <div class="hero-lbl">Erhebungsmonate</div>
+    </div>
+  </div>
+
+  <main>
+    <div class="disclaimer">
+      <strong>Hinweis zur Methodik</strong>
+      Diese Umfrage ist nicht repräsentativ (Self-Selection Bias, Online-Erreichbarkeit).
+      Regionaldaten werden nur für Bundesländer mit mindestens 50 Einreichungen angezeigt.
+      Freitextantworten und Postleitzahlen werden nicht veröffentlicht.
+    </div>
+
+    <!-- Politische Orientierung -->
+    <div class="two-col">
+      <div class="section">
+        <h2>Politische Grundhaltung</h2>
+        <p class="subtitle">1 = sehr konservativ · 7 = sehr progressiv</p>
+        <canvas id="chart-q029"></canvas>
+      </div>
+      <div class="section">
+        <h2>Haltung zu staatlicher Autorität</h2>
+        <p class="subtitle">1 = sehr autoritär · 7 = sehr libertär</p>
+        <canvas id="chart-q030"></canvas>
+      </div>
+    </div>
+
+    <!-- Wahlverhalten -->
+    <div class="two-col">
+      <div class="section">
+        <h2>Bundestagswahl 2025 – Zweitstimme</h2>
+        <canvas id="chart-q037"></canvas>
+      </div>
+      <div class="section">
+        <h2>Aktuelle Wahlabsicht</h2>
+        <canvas id="chart-q038"></canvas>
+      </div>
+    </div>
+
+    <!-- Institutionenvertrauen -->
+    <div class="section">
+      <h2>Institutionenvertrauen</h2>
+      <p class="subtitle">Durchschnitt auf 5-Punkte-Skala (1 = kein Vertrauen, 5 = volles Vertrauen)</p>
+      <canvas id="chart-trust"></canvas>
+    </div>
+
+    <!-- Populismus + Lebenszufriedenheit -->
+    <div class="two-col">
+      <div class="section">
+        <h2>Lebenszufriedenheit (Q104)</h2>
+        <p class="subtitle">0 = gar nicht zufrieden · 10 = vollkommen</p>
+        <canvas id="chart-q104"></canvas>
+      </div>
+      <div class="section">
+        <h2>Umfragen-Teilnahme pro Monat</h2>
+        <canvas id="chart-monthly"></canvas>
+      </div>
+    </div>
+
+    <!-- Demografischer Überblick -->
+    <div class="section">
+      <h2>Demografischer Überblick</h2>
+      <div class="two-col">
+        <div>
+          <canvas id="chart-gender"></canvas>
+        </div>
+        <div>
+          <canvas id="chart-income"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bundesland-Übersicht -->
+    <div class="section">
+      <h2>Bundesländer</h2>
+      <p class="subtitle" id="kanon-note"></p>
+      <div class="bl-grid" id="bl-grid"></div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+const PARTY_COLORS = {
+  'CDU/CSU': '#1a1a1a', 'SPD': '#e3000f', 'Bündnis 90/Die Grünen': '#1fa12d',
+  'FDP': '#ffed00', 'AfD': '#009ee0', 'BSW': '#8b1a1a', 'Die Linke': '#be3075',
+  'Sonstige': '#9ca3af', 'Nicht gewählt / nicht wahlberechtigt': '#d1d5db',
+  'Würde nicht wählen': '#d1d5db',
+};
+const INSTITUTION_LABELS = {
+  Q053: 'Bundesverfassungsgericht', Q054: 'Polizei', Q055: 'Bundestag',
+  Q056: 'Öff.-rechtl. Medien', Q057: 'Privatmedien', Q058: 'Bundeswehr',
+  Q059: 'Europäische Union', Q060: 'Kirchen', Q061: 'Wissenschaft',
+};
+const ALL_BUNDESLAENDER = [
+  'Baden-Württemberg','Bayern','Berlin','Brandenburg','Bremen','Hamburg',
+  'Hessen','Mecklenburg-Vorpommern','Niedersachsen','Nordrhein-Westfalen',
+  'Rheinland-Pfalz','Saarland','Sachsen','Sachsen-Anhalt','Schleswig-Holstein','Thüringen',
+];
+
+function getQ(nat, qid) { return nat?.[qid]?.counts || {}; }
+function getQMean(nat, qid) { return nat?.[qid]?.mean; }
+
+function countsToBars(counts, orderedKeys) {
+  const keys = orderedKeys || Object.keys(counts).sort((a,b)=>{
+    const na=parseFloat(a), nb=parseFloat(b);
+    return isNaN(na)||isNaN(nb) ? a.localeCompare(b) : na-nb;
+  });
+  return { labels: keys, data: keys.map(k => counts[k] || 0) };
+}
+
+function barChart(id, labels, data, colors, horizontal=false) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: colors || '#3b82f6', borderRadius: 3 }]
+    },
+    options: {
+      indexAxis: horizontal ? 'y' : 'x',
+      plugins: { legend: { display: false } },
+      scales: { [horizontal ? 'x' : 'y']: { beginAtZero: true } }
+    }
+  });
+}
+
+function render(stats) {
+  const nat = stats.national || {};
+  const months = stats.by_month || {};
+
+  // Hero
+  document.getElementById('h-total').textContent = stats.total ?? '–';
+  document.getElementById('h-regions').textContent = Object.keys(stats.regional || {}).length;
+  document.getElementById('h-months').textContent = Object.keys(months).length;
+
+  // Q029 political orientation
+  const q029 = countsToBars(getQ(nat,'Q029'), ['1','2','3','4','5','6','7']);
+  barChart('chart-q029', q029.labels, q029.data);
+
+  // Q030 authority
+  const q030 = countsToBars(getQ(nat,'Q030'), ['1','2','3','4','5','6','7']);
+  barChart('chart-q030', q030.labels, q030.data);
+
+  // Q037 BT 2025
+  const q037 = getQ(nat,'Q037');
+  const partyKeys = Object.keys(q037).sort((a,b)=>(q037[b]||0)-(q037[a]||0));
+  barChart('chart-q037', partyKeys.map(k=>k.length>12?k.slice(0,12)+'…':k),
+    partyKeys.map(k=>q037[k]||0),
+    partyKeys.map(k=>PARTY_COLORS[k]||'#9ca3af'));
+
+  // Q038 vote intention
+  const q038 = getQ(nat,'Q038');
+  const p38Keys = Object.keys(q038).sort((a,b)=>(q038[b]||0)-(q038[a]||0));
+  barChart('chart-q038', p38Keys.map(k=>k.length>12?k.slice(0,12)+'…':k),
+    p38Keys.map(k=>q038[k]||0),
+    p38Keys.map(k=>PARTY_COLORS[k]||'#9ca3af'));
+
+  // Institution trust (means)
+  const trustIds = Object.keys(INSTITUTION_LABELS);
+  const trustMeans = trustIds.map(qid => getQMean(nat, qid) || 0);
+  const trustLabels = trustIds.map(qid => INSTITUTION_LABELS[qid]);
+  barChart('chart-trust', trustLabels, trustMeans,
+    trustMeans.map(v => v >= 3.5 ? '#16a34a' : v >= 2.5 ? '#d97706' : '#dc2626'),
+    true);
+
+  // Q104 life satisfaction
+  const q104 = countsToBars(getQ(nat,'Q104'), ['0','1','2','3','4','5','6','7','8','9','10']);
+  barChart('chart-q104', q104.labels, q104.data);
+
+  // Monthly
+  const mEntries = Object.entries(months);
+  if (mEntries.length) {
+    new Chart(document.getElementById('chart-monthly'), {
+      type: 'line',
+      data: {
+        labels: mEntries.map(([k])=>k),
+        datasets: [{ label: 'n', data: mEntries.map(([,v])=>v),
+          borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.1)',
+          tension:.3, fill:true, pointRadius:4 }]
+      },
+      options: { plugins:{ legend:{display:false} }, scales:{ y:{ beginAtZero:true } } }
+    });
+  }
+
+  // Gender Q002
+  const q002 = getQ(nat,'Q002');
+  const gKeys = Object.keys(q002).sort((a,b)=>(q002[b]||0)-(q002[a]||0));
+  new Chart(document.getElementById('chart-gender'), {
+    type: 'doughnut',
+    data: { labels: gKeys, datasets:[{ data: gKeys.map(k=>q002[k]||0),
+      backgroundColor:['#3b82f6','#ec4899','#8b5cf6','#14b8a6','#f59e0b','#6b7280'] }] },
+    options: { plugins:{ legend:{ position:'bottom', labels:{ font:{ size:11 } } } },
+               maintainAspectRatio: true }
+  });
+
+  // Income Q019
+  const q019 = getQ(nat,'Q019');
+  const incKeys = ['< 1.000 €','1.000–1.500 €','1.500–2.000 €','2.000–2.500 €',
+    '2.500–3.000 €','3.000–4.000 €','4.000–5.000 €','5.000–7.500 €','7.500–10.000 €','> 10.000 €'];
+  barChart('chart-income', incKeys.map(k=>k), incKeys.map(k=>q019[k]||0));
+
+  // Bundesland grid
+  const regional = stats.regional || {};
+  const suppressed = stats.suppressed_regions || [];
+  const threshold = stats.k_anon_threshold || 50;
+  document.getElementById('kanon-note').textContent =
+    `Daten werden nur für Bundesländer mit ≥ ${threshold} Einreichungen angezeigt. ` +
+    (suppressed.length ? `${suppressed.length} Bundesland/Bundesländer ohne ausreichende Daten.` : '');
+
+  const grid = document.getElementById('bl-grid');
+  for (const bl of ALL_BUNDESLAENDER) {
+    const div = document.createElement('div');
+    if (regional[bl]) {
+      div.className = 'bl-card ok';
+      div.innerHTML = `<div class="bl-name">${bl}</div><div class="bl-n">n = ${regional[bl].n}</div>`;
+    } else {
+      div.className = 'bl-card none';
+      div.innerHTML = `<div class="bl-name">${bl}</div><div class="bl-n">Keine Daten</div>`;
+    }
+    grid.appendChild(div);
+  }
+}
+
+// Load
+fetch('/results/api/stats')
+  .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+  .then(data => {
+    if (!data.total) {
+      document.getElementById('loading').textContent =
+        'Noch keine Daten verfügbar. Bitte später zurückkommen.';
+      return;
+    }
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = '';
+    render(data);
+  })
+  .catch(err => {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = '';
+    document.getElementById('error').textContent = 'Fehler beim Laden der Daten: ' + err.message;
+  });
+</script>
+</body>
+</html>

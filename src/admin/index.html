@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin – Deutsche Gesellschaftsstudie</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f6fa; --surface: #fff; --border: #e2e4ec;
+    --text: #1a1d2e; --muted: #6b7280; --accent: #2563eb;
+    --danger: #dc2626; --success: #16a34a;
+  }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* Login */
+  #login { display:flex; flex-direction:column; align-items:center; justify-content:center;
+           min-height:100vh; gap:1rem; }
+  #login h1 { font-size:1.5rem; }
+  #login input { padding:.5rem .75rem; border:1px solid var(--border); border-radius:6px;
+                 width:280px; font-size:14px; }
+  #login button { padding:.5rem 1.5rem; background:var(--accent); color:#fff;
+                  border:none; border-radius:6px; cursor:pointer; font-size:14px; }
+  #login .err { color:var(--danger); font-size:13px; }
+
+  /* Layout */
+  #app { display:none; }
+  header { background:var(--surface); border-bottom:1px solid var(--border);
+           padding:.75rem 1.5rem; display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size:1rem; font-weight:600; }
+  .hdr-actions { display:flex; gap:.5rem; }
+  .btn { padding:.35rem .85rem; border-radius:5px; cursor:pointer; font-size:13px;
+         border:1px solid var(--border); background:var(--surface); color:var(--text); }
+  .btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .btn-sm { padding:.2rem .6rem; font-size:12px; }
+
+  main { padding:1.25rem 1.5rem; max-width:1200px; }
+
+  /* Cards */
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+           gap:.75rem; margin-bottom:1.5rem; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:8px;
+          padding:1rem; text-align:center; }
+  .card-val { font-size:2rem; font-weight:700; color:var(--accent); line-height:1.1; }
+  .card-lbl { color:var(--muted); font-size:12px; margin-top:.25rem; }
+
+  /* Sections */
+  .section { background:var(--surface); border:1px solid var(--border); border-radius:8px;
+             padding:1rem 1.25rem; margin-bottom:1rem; }
+  .section h2 { font-size:.875rem; font-weight:600; margin-bottom:.75rem;
+                padding-bottom:.5rem; border-bottom:1px solid var(--border); }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+
+  canvas { max-height:280px; }
+
+  /* Completion table */
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; padding:.35rem .5rem; color:var(--muted); font-weight:500;
+       border-bottom:1px solid var(--border); }
+  td { padding:.3rem .5rem; border-bottom:1px solid #f0f1f5; }
+  .bar-cell { width:160px; }
+  .bar { height:8px; border-radius:4px; background:var(--accent); opacity:.7; }
+
+  /* Question browser */
+  select { padding:.35rem .6rem; border:1px solid var(--border); border-radius:5px;
+           font-size:13px; margin-bottom:.75rem; width:100%; max-width:420px; }
+
+  #status { font-size:12px; color:var(--muted); }
+  .tag { display:inline-block; padding:.15rem .5rem; border-radius:4px; font-size:11px;
+         background:#eff6ff; color:var(--accent); margin-left:.5rem; }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login">
+  <h1>Admin Dashboard</h1>
+  <p style="color:var(--muted);font-size:13px">Deutsche Gesellschaftsstudie</p>
+  <input type="password" id="token-input" placeholder="Admin-Token" autocomplete="off">
+  <button onclick="login()">Anmelden</button>
+  <span class="err" id="login-err"></span>
+</div>
+
+<!-- App -->
+<div id="app">
+  <header>
+    <div>
+      <h1>Deutsche Gesellschaftsstudie <span class="tag">Admin</span></h1>
+      <span id="status">Lädt…</span>
+    </div>
+    <div class="hdr-actions">
+      <button class="btn btn-sm" onclick="refreshCache()">Cache leeren</button>
+      <button class="btn btn-sm btn-primary" onclick="downloadExport()">Datensatz exportieren</button>
+      <button class="btn btn-sm" onclick="logout()">Abmelden</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Stats cards -->
+    <div class="cards">
+      <div class="card"><div class="card-val" id="c-total">–</div><div class="card-lbl">Einreichungen</div></div>
+      <div class="card"><div class="card-val" id="c-newsletter">–</div><div class="card-lbl">Newsletter</div></div>
+      <div class="card"><div class="card-val" id="c-month">–</div><div class="card-lbl">Aktueller Monat</div></div>
+      <div class="card"><div class="card-val" id="c-regions">–</div><div class="card-lbl">Bundesländer</div></div>
+      <div class="card"><div class="card-val" id="c-langs">–</div><div class="card-lbl">Sprachen</div></div>
+    </div>
+
+    <!-- Monthly trend -->
+    <div class="section">
+      <h2>Einreichungen pro Monat</h2>
+      <canvas id="monthly-chart"></canvas>
+    </div>
+
+    <!-- Region + Language -->
+    <div class="two-col">
+      <div class="section">
+        <h2>Bundesländer</h2>
+        <canvas id="region-chart"></canvas>
+      </div>
+      <div class="section">
+        <h2>Sprachen</h2>
+        <canvas id="lang-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Question browser -->
+    <div class="section">
+      <h2>Fragen-Browser</h2>
+      <select id="q-select" onchange="renderQuestionChart()">
+        <option value="">— Frage wählen —</option>
+      </select>
+      <canvas id="q-chart"></canvas>
+    </div>
+
+    <!-- Completion rates (bottom 20) -->
+    <div class="section">
+      <h2>Niedrigste Completion Rates</h2>
+      <table>
+        <thead><tr><th>Frage</th><th>Beantwortet</th><th class="bar-cell"></th></tr></thead>
+        <tbody id="completion-body"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+const API = '';  // same origin
+let TOKEN = '';
+let STATS = null;
+const charts = {};
+
+function getToken() { return sessionStorage.getItem('admin_token') || ''; }
+function setToken(t) { sessionStorage.setItem('admin_token', t); TOKEN = t; }
+
+async function apiFetch(path, method = 'GET') {
+  const r = await fetch(API + path, {
+    method,
+    headers: { 'X-Admin-Token': TOKEN }
+  });
+  if (r.status === 401) { logout(); return null; }
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function login() {
+  const t = document.getElementById('token-input').value.trim();
+  if (!t) return;
+  setToken(t);
+  try {
+    const data = await apiFetch('/admin/api/stats');
+    if (!data) return;
+    document.getElementById('login-err').textContent = '';
+    showApp(data);
+  } catch(e) {
+    document.getElementById('login-err').textContent = 'Ungültiger Token oder Server nicht erreichbar.';
+    sessionStorage.removeItem('admin_token');
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('admin_token');
+  location.reload();
+}
+
+async function refreshCache() {
+  await apiFetch('/admin/api/invalidate-cache', 'POST');
+  const data = await apiFetch('/admin/api/stats');
+  if (data) { STATS = data; renderAll(); }
+}
+
+async function downloadExport() {
+  const data = await apiFetch('/admin/api/export');
+  if (!data) return;
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `gesellschaftsstudie_export_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+function showApp(data) {
+  STATS = data;
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  renderAll();
+}
+
+function renderAll() {
+  const d = STATS;
+  const months = d.by_month || {};
+  const monthEntries = Object.entries(months);
+  const currentMonth = new Date().toISOString().slice(0,7);
+  const thisMonth = months[currentMonth] || 0;
+
+  // Cards
+  document.getElementById('c-total').textContent = d.total ?? '–';
+  document.getElementById('c-newsletter').textContent = d.newsletter_count >= 0 ? d.newsletter_count : '–';
+  document.getElementById('c-month').textContent = thisMonth;
+  document.getElementById('c-regions').textContent = Object.keys(d.by_region || {}).filter(k => k !== '__ka__').length;
+  document.getElementById('c-langs').textContent = Object.keys(d.by_lang || {}).length;
+
+  const updatedAt = new Date().toLocaleTimeString('de-DE');
+  document.getElementById('status').textContent = `Aktualisiert: ${updatedAt}`;
+
+  // Monthly chart
+  destroyChart('monthly-chart');
+  if (monthEntries.length) {
+    charts['monthly-chart'] = new Chart(document.getElementById('monthly-chart'), {
+      type: 'line',
+      data: {
+        labels: monthEntries.map(([k]) => k),
+        datasets: [{ label: 'Einreichungen', data: monthEntries.map(([,v]) => v),
+          borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.1)',
+          tension: .3, fill: true, pointRadius: 4 }]
+      },
+      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+  }
+
+  // Region chart
+  const regionEntries = Object.entries(d.by_region || {})
+    .filter(([k]) => k !== '__ka__')
+    .sort(([,a],[,b]) => b - a);
+  destroyChart('region-chart');
+  if (regionEntries.length) {
+    charts['region-chart'] = new Chart(document.getElementById('region-chart'), {
+      type: 'bar',
+      data: {
+        labels: regionEntries.map(([k]) => k),
+        datasets: [{ label: 'n', data: regionEntries.map(([,v]) => v),
+          backgroundColor: '#3b82f6' }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true } }
+      }
+    });
+  }
+
+  // Lang chart
+  const langEntries = Object.entries(d.by_lang || {});
+  destroyChart('lang-chart');
+  if (langEntries.length) {
+    charts['lang-chart'] = new Chart(document.getElementById('lang-chart'), {
+      type: 'doughnut',
+      data: {
+        labels: langEntries.map(([k]) => k.toUpperCase()),
+        datasets: [{ data: langEntries.map(([,v]) => v),
+          backgroundColor: ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2'] }]
+      },
+      options: { plugins: { legend: { position: 'bottom' } } }
+    });
+  }
+
+  // Populate question selector
+  const sel = document.getElementById('q-select');
+  const existingIds = new Set([...sel.options].map(o => o.value));
+  const qids = Object.keys(d.questions || {}).sort();
+  for (const qid of qids) {
+    if (!existingIds.has(qid)) {
+      const opt = document.createElement('option');
+      opt.value = qid; opt.textContent = qid;
+      sel.appendChild(opt);
+    }
+  }
+
+  // Completion table (bottom 20)
+  const comp = d.completion_rate || {};
+  const sorted = Object.entries(comp).sort(([,a],[,b]) => a - b).slice(0, 20);
+  const tbody = document.getElementById('completion-body');
+  tbody.innerHTML = '';
+  for (const [qid, rate] of sorted) {
+    const pct = Math.round(rate * 100);
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td>${qid}</td>
+        <td>${pct}%</td>
+        <td class="bar-cell"><div class="bar" style="width:${pct}%"></div></td>
+      </tr>`);
+  }
+}
+
+function renderQuestionChart() {
+  const qid = document.getElementById('q-select').value;
+  destroyChart('q-chart');
+  if (!qid || !STATS?.questions?.[qid]) return;
+  const q = STATS.questions[qid];
+  const counts = q.counts || {};
+  const entries = Object.entries(counts).sort(([a],[b]) => {
+    const na = parseFloat(a), nb = parseFloat(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.localeCompare(b);
+  });
+  if (!entries.length) return;
+
+  const mean = q.mean != null ? `  ⌀ ${q.mean}` : '';
+  charts['q-chart'] = new Chart(document.getElementById('q-chart'), {
+    type: 'bar',
+    data: {
+      labels: entries.map(([k]) => k.length > 30 ? k.slice(0,28)+'…' : k),
+      datasets: [{ label: `n=${q.n}${mean}`, data: entries.map(([,v]) => v),
+        backgroundColor: '#3b82f6' }]
+    },
+    options: {
+      plugins: { legend: { position: 'top' } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+// Auto-login if token stored
+TOKEN = getToken();
+if (TOKEN) {
+  document.getElementById('token-input').value = TOKEN;
+  login();
+}
+
+// Enter key on token field
+document.getElementById('token-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
+});
+</script>
+</body>
+</html>
