@@ -24,3 +24,5 @@ dist/
 # Editor
 .vscode/
 .idea/
+
+PROJECT.md
