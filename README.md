@@ -5,7 +5,6 @@ Anonymous survey on demographics, politics, attitudes, and living conditions in 
 **Domain:** `survey.muehrke.de`  
 **Stack:** React · FastAPI · Apache · systemd  
 **Questions:** 157 in 17 sections  
-**Schema-Hash:** `acffb1411db2fd29f364346686654a3357a3700d9b1229d96495b49678a4146f`
 
 ---
 
