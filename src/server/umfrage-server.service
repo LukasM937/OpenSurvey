@@ -1,0 +1,75 @@
+[Unit]
+Description=Umfrage Survey Server
+After=network.target
+
+[Service]
+Type=simple
+User=umfrage
+Group=umfrage
+WorkingDirectory=/opt/survey-server
+
+Environment=SURVEY_DATA_DIR=/var/data/umfrage
+Environment=SURVEY_ALLOWED_ORIGINS=*
+
+# [A] --proxy-headers + --forwarded-allow-ips ist ZWINGEND erforderlich.
+#     Ohne diese Flags ist X-Forwarded-For fälschbar und Rate Limiting
+#     vollständig umgehbar (siehe SECURITY_AUDIT_FINAL.md, Punkt A).
+#     --limit-max-requests startet den Worker nach N Requests neu
+#     (verhindert schleichende Memory Leaks in uvicorn selbst).
+ExecStart=/opt/survey-server/venv/bin/uvicorn server:app \
+    --host 127.0.0.1 \
+    --port 8742 \
+    --workers 1 \
+    --proxy-headers \
+    --forwarded-allow-ips 127.0.0.1 \
+    --limit-max-requests 10000
+
+Restart=on-failure
+RestartSec=5
+
+# ── Systemd Hardening ─────────────────────────────────────────
+
+# Grundlegende Isolation
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/data/umfrage
+
+# Kein Zugriff auf Home-Verzeichnisse anderer User
+ProtectHome=yes
+
+# Kein Zugriff auf physische Geräte (/dev/*)
+PrivateDevices=yes
+
+# Nur IPv4, IPv6 und Unix Sockets erlaubt
+# (kein Raw, kein Netlink, kein Packet Socket)
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Alle Linux Capabilities entzogen
+# (kein bind < 1024, kein chown fremder Dateien, etc.)
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Nur Standard Service-Syscalls erlaubt
+# Verhindert exotische Syscalls die für Exploits nötig wären
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Kein ABI-Wechsel (verhindert personality()-basierten Exploit-Trick)
+LockPersonality=yes
+
+# Kein W+X Speicher – verhindert Shellcode-Injektion
+MemoryDenyWriteExecute=yes
+
+# Kein Realtime-Scheduling (verhindert CPU-Starvation)
+RestrictRealtime=yes
+
+# Keine neuen Namespaces (verhindert Container-Escape-Vektoren)
+RestrictNamespaces=yes
+
+# Dateien die der Service erstellt sind nur für ihn lesbar
+# (ergänzt das 0o600 im Python-Code als Defense in Depth)
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
