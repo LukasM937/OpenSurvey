@@ -1,16 +1,32 @@
-import { useEffect, useRef, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const KA = "__ka__";
 
 // ↓ Server-Endpunkt hier eintragen
-const SERVER_URL = "https://api.muehrke.de/api/survey";
+const SERVER_URL = "https://survey.muehrke.de/api/survey";
+
+// ── Storage-Adapter ───────────────────────────────────────────
+// window.storage ist die Claude-Artifact-API und nur innerhalb von claude.ai
+// verfügbar. Im produktiven Vite-Build (survey.muehrke.de) fällt dieser Adapter
+// automatisch auf localStorage zurück – gleiches Interface, kein Code-Unterschied.
+const storage = (() => {
+  if (typeof window !== "undefined" && window.storage && typeof window.storage.get === "function") {
+    return window.storage;
+  }
+  // localStorage-Adapter mit identischem API
+  return {
+    get:    (key)        => Promise.resolve(localStorage.getItem(key) !== null ? { value: localStorage.getItem(key) } : null),
+    set:    (key, value) => { try { localStorage.setItem(key, value); } catch {} return Promise.resolve({ key, value }); },
+    delete: (key)        => { localStorage.removeItem(key); return Promise.resolve({ key, deleted: true }); },
+  };
+})();
 
 // ── [F] Schema-Hash ───────────────────────────────────────────
 // SHA-256 über sorted(alle Fragen-IDs) als kompaktes JSON-Array.
 // Muss mit SCHEMA_HASH im server.py übereinstimmen.
 // Neu berechnen wenn Fragen hinzugefügt/entfernt werden:
 //   python3 -c "import hashlib,json; ids=sorted(['Q001',...,'Q108']); print(hashlib.sha256(json.dumps(ids,separators=(',',':')).encode()).hexdigest())"
-const SCHEMA_HASH = "b659a728a1147f0f2ea35727ac21fab2046f92c36be751eb594e5f6ad762615f";
+const SCHEMA_HASH = "acffb1411db2fd29f364346686654a3357a3700d9b1229d96495b49678a4146f";
 
 // Normalisiert alle Felder vor dem Senden:
 // - Übersprungene Fragen  → "__skipped__"  (wird server-seitig nicht als Antwort gezählt)
@@ -47,32 +63,34 @@ function normalizeResponses(responses, sections) {
 
 const SKIP_SENTINEL = "__skipped__";
 
-function shouldSkip(q, resp) {
+function shouldSkip(q, resp, alreadySkipped = new Set()) {
   if (!q.skip_if) return false;
   const { q: depId, op, val } = q.skip_if;
+  // Wenn die Abhängigkeitsfrage selbst übersprungen wurde → diese auch überspringen
+  if (alreadySkipped.has(depId)) return true;
   const depVal = resp[depId];
   // Nicht beantwortet oder Keine Angabe → nie überspringen
   if (depVal === undefined || depVal === KA) return false;
   switch (op) {
-    case "eq":    return depVal === val;
-    case "neq":   return depVal !== val;
+    case "eq":          return depVal === val;
+    case "neq":         return depVal !== val;
     case "lt":          return typeof depVal === "number" && depVal < val;
     case "lte":         return typeof depVal === "number" && depVal <= val;
     case "in":          return Array.isArray(val) && val.includes(depVal);
     case "notin":       return Array.isArray(val) && !val.includes(depVal);
-    // Für Check-Felder (Array-Antworten):
     case "contains":    return Array.isArray(depVal) && depVal.includes(val);
     case "notcontains": return Array.isArray(depVal) && !depVal.includes(val);
-    default:      return false;
+    default:            return false;
   }
 }
 
-// Alle Fragen-IDs die aktuell übersprungen werden (über alle Sektionen)
+// Alle Fragen-IDs die aktuell übersprungen werden – iterativ berechnet
+// damit Kaskaden (A→B→C) korrekt aufgelöst werden.
 function getSkippedIds(resp) {
   const skipped = new Set();
   for (const sec of SECTIONS) {
     for (const q of sec.questions) {
-      if (shouldSkip(q, resp)) skipped.add(q.id);
+      if (shouldSkip(q, resp, skipped)) skipped.add(q.id);
     }
   }
   return skipped;
@@ -375,6 +393,44 @@ const TOOLTIPS = {
     Q105: "Einsamkeit ist ein wachsendes gesellschaftliches Thema mit erheblichen Auswirkungen auf Gesundheit und politische Einstellungen.",
     Q106: "Die Stärke sozialer Netzwerke ist ein zentraler Schutzfaktor für psychisches Wohlbefinden.",
     Q107: "Kontakt über politische 'Blasen' hinaus – ein Indikator für gesellschaftliche Kohäsion oder Polarisierung.",
+    // S15 – Einstellungen & Selbstwahrnehmung
+    Q123: "Politisches Selbstvertrauen beeinflusst Engagement und Partizipation. Unsicherheit bei politischen Themen ist weit verbreitet und kein Zeichen von Unwissen.",
+    Q124: "Meinungsflexibilität ist ein Zeichen kritischen Denkens. Diese Frage misst wie offen Sie für neue Informationen sind.",
+    Q125: "Die subjektive Wahrnehmung politischer Komplexität beeinflusst, wie Menschen politische Informationen verarbeiten und ob sie sich angesprochen fühlen.",
+    Q126: "Social Media sind für viele Menschen eine wichtige Informationsquelle, gelten aber gleichzeitig als anfällig für Desinformation.",
+    Q127: "Aktives Fact-Checking ist eine Schlüsselkompetenz für politische Meinungsbildung in der digitalen Öffentlichkeit.",
+    Q128: "Politische Alltagsgespräche sind ein Indikator für politisches Engagement und gesellschaftliche Vernetzung.",
+    Q129: "Das bewusste Meiden widersprüchlicher Informationen ('Confirmation Bias' / Echokammer-Verhalten) ist ein gut erforschtes Phänomen in der Politikpsychologie.",
+    Q130: "Digitale Kompetenz bestimmt, wie gut Menschen Online-Informationen einschätzen und nutzen können.",
+    Q131: "KI-Nutzung im Alltag verändert wie Menschen Informationen suchen, verarbeiten und Entscheidungen treffen.",
+    Q132: "KI in politischen Prozessen (z.B. automatisierte Entscheidungen, Algorithmen in der Verwaltung) ist ein wachsendes gesellschaftspolitisches Thema.",
+    Q133: "Diese klassische Werteskala misst die Grundorientierung zwischen kollektiver Sicherheit und individueller Freiheit – ein zentrales Spannungsfeld in der Politikphilosophie.",
+    Q134: "Die Spannung zwischen Gleichheits- und Leistungsprinzip ist eine der fundamentalsten Wertedimensionen in der Gesellschaft.",
+    Q137: "Diese Frage misst die Haltung zur Vermögensungleichheit und damit zur Legitimität von Wohlstandsunterschieden.",
+    Q135: "Zukunftsoptimismus/-pessimismus für Deutschland ist ein wichtiger Indikator für gesellschaftliches Vertrauen und politische Stabilität.",
+    Q136: "Bedrohungswahrnehmungen unterscheiden sich stark nach politischer Orientierung, Alter und sozialer Lage.",
+    Q138: "Diese Frage dient der Qualitätsprüfung der Umfrage. Bitte wählen Sie bewusst die Option 'Stimme eher nicht zu' (Wert 2). Antworten die deutlich abweichen, deuten auf zufälliges Klicken hin.",
+    Q139: "Beeinträchtigungen beeinflussen gesellschaftliche Teilhabe, politische Prioritäten und Erfahrungen mit staatlichen Systemen erheblich.",
+    Q140: "Unterschiedliche Arten von Beeinträchtigungen bringen unterschiedliche Herausforderungen mit sich – diese Differenzierung ist für politische Analysen wichtig.",
+    Q141: "Das Ausmaß der Auswirkungen einer Beeinträchtigung auf die gesellschaftliche Teilhabe variiert stark je nach Art, Unterstützung und gesellschaftlichen Rahmenbedingungen.",
+    // S16 – Feedback
+    Q142: "Ihr Feedback hilft, die Umfrage zu verbessern und für zukünftige Erhebungen zu optimieren.",
+    Q143: "Fehlende Themen sind wichtige Hinweise für die Weiterentwicklung der Studie.",
+    Q144: "Diese Information hilft zu verstehen, über welche Kanäle die Umfrage verbreitet wird – wichtig für die Einschätzung der Stichprobenverzerrung.",
+    // S17 – Diskriminierung & Gleichstellung
+    Q145: "Gemeint sind persönlich erlebte Situationen, in denen Sie unfair behandelt wurden – unabhängig davon ob dies rechtlich als Diskriminierung gilt.",
+    Q146: "Mehrfachauswahl möglich. Die Frage zielt auf den tatsächlichen Grund der Benachteiligung aus Ihrer Wahrnehmung.",
+    Q147: "Der Bereich der Diskriminierung gibt Aufschluss über strukturelle Muster – z.B. ob Benachteiligungen besonders im Arbeitsmarkt oder bei Behörden auftreten.",
+    Q148: "Diskriminierung kann von Privatpersonen, aber auch von Institutionen ausgehen – beides ist gesellschaftlich relevant.",
+    Q149: "Viele Diskriminierungserfahrungen werden nicht gemeldet. Das Verhältnis zwischen Erfahrung und Meldung gibt Aufschluss über Barrieren beim Zugang zum Rechtssystem.",
+    Q150: "Die persönliche Betroffenheit zeigt wie tiefgreifend Diskriminierungserfahrungen das Leben beeinflussen können.",
+    Q151: "Freiwillige Angabe ohne vorgegebene Kategorien – weil ethnische Identität komplex ist und nicht in Schubladen passt.",
+    Q152: "Formuliert bewusst ohne Nennung konkreter Beziehungsformen um alle Konstellationen einzuschließen – gleichgeschlechtlich, trans, nicht-binär, etc.",
+    Q153: "Formuliert ohne Geschlechterbezug um alle Beziehungsmodelle einzuschließen – unabhängig davon wer welche Rolle übernimmt.",
+    Q154: "Diese Frage misst die Wahrnehmung strukturellen Rassismus – ein zentrales und in Deutschland kontrovers diskutiertes Thema.",
+    Q155: "Misst die Wahrnehmung von Geschlechterdiskriminierung als strukturelles Problem, nicht als Einzelfall.",
+    Q156: "Quoten und Fördermaßnahmen sind gesellschaftlich umstritten – diese Frage erfasst die Grundhaltung dazu.",
+    Q157: "Diese Gegenfrage erlaubt es Menschen die Überdruss gegenüber der Gleichstellungsdebatte empfinden, das auszudrücken – wichtig für ein vollständiges Bild.",
   },
   en: {
     // Tooltip translations can be added here.
@@ -791,6 +847,51 @@ const SECTIONS = [
     {id:"Q106",text:"Stärke Ihres sozialen Netzwerks:",type:"likert5",left:"Sehr schwach / isoliert",right:"Sehr stark / gut vernetzt"},
     {id:"Q107",text:"Kontakt zu Menschen mit anderen politischen Überzeugungen im Alltag:",type:"radio",opts:["Nie","Selten","Manchmal","Oft","Täglich"]},
   ]},
+  {id:"S15",title:"Einstellungen & Selbstwahrnehmung",questions:[
+    {id:"Q123",text:"Wie sicher sind Sie sich generell bei politischen Themen?",type:"likert5",left:"Sehr unsicher",right:"Sehr sicher"},
+    {id:"Q124",text:"Wie oft ändern Sie Ihre politische Meinung nach neuen Informationen?",type:"radio",opts:["Nie","Selten","Gelegentlich","Häufig","Sehr häufig"]},
+    {id:"Q125",text:"Wie komplex empfinden Sie politische Themen im Allgemeinen?",type:"likert5",left:"Sehr einfach",right:"Sehr komplex"},
+    {id:"Q126",text:"Wie vertrauenswürdig sind Social Media als politische Informationsquelle?",type:"likert5",left:"Gar nicht vertrauenswürdig",right:"Sehr vertrauenswürdig"},
+    {id:"Q127",text:"Wie oft überprüfen Sie politische Informationen aktiv (z.B. per Gegenlesen)?",type:"radio",opts:["Nie","Selten","Manchmal","Häufig","Fast immer"]},
+    {id:"Q128",text:"Wie oft sprechen Sie aktiv über Politik im Alltag?",type:"radio",opts:["Nie","Selten (wenige Male im Jahr)","Gelegentlich (monatlich)","Häufig (wöchentlich)","Sehr häufig (täglich)"]},
+    {id:"Q129",text:"Haben Sie schon einmal bewusst Informationen gemieden, die Ihrer Meinung widersprechen?",type:"radio",opts:["Nein, nie","Selten","Manchmal","Häufig","Ja, regelmäßig"]},
+    {id:"Q130",text:"Wie schätzen Sie Ihre digitale Kompetenz ein?",type:"likert5",left:"Sehr gering",right:"Sehr hoch",group_header:"Digitale Kompetenz & KI:"},
+    {id:"Q131",text:"Nutzen Sie KI-Systeme regelmäßig (z.B. Chatbots, Sprachassistenten)?",type:"radio",opts:["Nein, nie","Selten (wenige Male)","Gelegentlich (monatlich)","Häufig (wöchentlich)","Täglich"]},
+    {id:"Q132",text:"Haltung zu KI in politischen Entscheidungsprozessen:",type:"likert5",left:"Klar dagegen",right:"Klar dafür"},
+    {id:"Q133",text:"Was ist Ihnen wichtiger?",type:"slider7",left:"Sicherheit & Stabilität",right:"Freiheit & Selbstbestimmung",group_header:"Grundlegende Werte:"},
+    {id:"Q134",text:"Sollte Gleichheit wichtiger sein als individuelle Leistung?",type:"likert5",left:"Leistung klar wichtiger",right:"Gleichheit klar wichtiger"},
+    {id:"Q137",text:"Ist es fair, wenn manche Menschen deutlich mehr besitzen als andere?",type:"likert5",left:"Völlig unfair",right:"Völlig fair"},
+    {id:"Q135",text:"Blick in die Zukunft Deutschlands:",type:"likert5",left:"Sehr pessimistisch",right:"Sehr optimistisch",group_header:"Zukunft & Bedrohungen:"},
+    {id:"Q136",text:"Welche Bedrohung empfinden Sie als größte für Deutschland? (Mehrfachauswahl)",type:"check",opts:["Klimawandel","Migration / Überfremdung","Wirtschaftlicher Abstieg","Politischer Extremismus","Kriminalität","Staatsverschuldung","Verlust nationaler Souveränität","Krieg / geopolitische Instabilität","Soziale Spaltung","KI & Digitalisierung","Sonstiges"]},
+    {id:"Q138",text:'Bitte wählen Sie hier „Stimme eher nicht zu" (Qualitätsprüfung).',type:"likert5",left:"Stimme gar nicht zu",right:"Stimme voll zu",group_header:"Qualitätsprüfung:"},
+    {id:"Q139",text:"Haben Sie eine Beeinträchtigung?",type:"radio",opts:["Nein","Ja, leicht (z.B. Legasthenie, leichte Sehschwäche)","Ja, mittel (z.B. chronische Erkrankung, Teilbehinderung)","Ja, schwer (z.B. Schwerbehinderung)"],group_header:"Beeinträchtigung:"},
+    {id:"Q140",text:"Art der Beeinträchtigung (Mehrfachauswahl):",type:"check",opts:["Physisch / körperlich","Psychisch / emotional","Kognitiv / Lernbeeinträchtigung","Sensorisch (Sehen / Hören)","Sonstiges"],skip_if:{q:"Q139",op:"eq",val:"Nein"}},
+    {id:"Q141",text:"Beeinflusst Ihre Beeinträchtigung Ihre Teilhabe am gesellschaftlichen Leben?",type:"likert5",left:"Gar nicht",right:"Sehr stark",skip_if:{q:"Q139",op:"eq",val:"Nein"}},
+  ]},
+  {id:"S17",title:"Diskriminierung & Gleichstellung",
+   description:"Diese Fragen beziehen sich auf persönliche Erfahrungen sowie gesellschaftliche Einstellungen. Alle Angaben sind freiwillig und anonym.",
+   questions:[
+    {id:"Q145",text:"Haben Sie in Deutschland jemals persönlich eine Benachteiligung oder Diskriminierung erlebt?",type:"radio",opts:["Nein","Ja, einmal","Ja, mehrfach","Ja, regelmäßig"]},
+    {id:"Q146",text:"Aufgrund welcher Merkmale wurden Sie benachteiligt? (Mehrfachauswahl)",type:"check",opts:["Geschlecht / Geschlechtsidentität","Ethnische Herkunft / Hautfarbe","Nationalität / Migrationshintergrund","Religion / Weltanschauung","Sexuelle Orientierung","Alter (zu jung oder zu alt)","Beeinträchtigung / Behinderung","Soziale Herkunft / Klasse","Sprache / Akzent","Äußeres Erscheinungsbild","Sonstiges"],skip_if:{q:"Q145",op:"eq",val:"Nein"}},
+    {id:"Q147",text:"In welchem Bereich wurde die Diskriminierung hauptsächlich erfahren? (Mehrfachauswahl)",type:"check",opts:["Arbeit / Bewerbung","Schule / Ausbildung / Studium","Behörden / Ämter","Wohnen / Wohnungssuche","Gesundheitsversorgung","Gastronomie / Handel / Dienstleistungen","Polizei / Justiz","Öffentlicher Raum / Alltag","Online / Social Media","Sonstiges"],skip_if:{q:"Q145",op:"eq",val:"Nein"}},
+    {id:"Q148",text:"Wurde die Diskriminierung von wem ausgeübt? (Mehrfachauswahl)",type:"check",opts:["Privatpersonen / Einzelne","Arbeitgeber:in / Vorgesetzte","Behörden / staatliche Stellen","Polizei","Unternehmen / Dienstleister","Online / anonym","Sonstiges"],skip_if:{q:"Q145",op:"eq",val:"Nein"}},
+    {id:"Q149",text:"Haben Sie die Diskriminierung gemeldet oder angezeigt?",type:"radio",opts:["Nein, nicht gemeldet","Ja, intern (z.B. HR, Schulleitung)","Ja, bei einer Beratungsstelle","Ja, bei der Polizei / Staatsanwaltschaft","Ja, bei einer Antidiskriminierungsstelle"],skip_if:{q:"Q145",op:"eq",val:"Nein"}},
+    {id:"Q150",text:"Wie sehr hat die Erfahrung Ihr Leben beeinflusst?",type:"likert5",left:"Kaum / gar nicht",right:"Sehr stark",skip_if:{q:"Q145",op:"eq",val:"Nein"}},
+    {id:"Q151",text:"Ethnische Selbstidentifikation (optional, Freitext):",type:"text",group_header:"Identität:"},
+    {id:"Q152",text:"\"Alle Beziehungsformen – unabhängig von Geschlecht, Identität oder Orientierung – sollten rechtlich gleichgestellt sein.\"",type:"likert5",left:"Stimme gar nicht zu",right:"Stimme voll zu",group_header:"Gleichstellungseinstellungen:"},
+    {id:"Q153",text:"\"Erwerbs- und Sorgearbeit sollten in Beziehungen unabhängig von Geschlecht oder Rolle gleichmäßig verteilt sein.\"",type:"likert5",left:"Stimme gar nicht zu",right:"Stimme voll zu"},
+    {id:"Q154",text:"\"Menschen werden in Deutschland aufgrund ihrer Herkunft oder ethnischen Zugehörigkeit systematisch benachteiligt.\"",type:"likert5",left:"Stimme gar nicht zu",right:"Stimme voll zu"},
+    {id:"Q155",text:"\"Menschen werden in Deutschland aufgrund ihres Geschlechts oder ihrer Geschlechtsidentität systematisch benachteiligt.\"",type:"likert5",left:"Stimme gar nicht zu",right:"Stimme voll zu"},
+    {id:"Q156",text:"\"Gezielte Fördermaßnahmen (z.B. Quoten) sind ein geeignetes Mittel um strukturelle Benachteiligungen auszugleichen.\"",type:"likert5",left:"Stimme gar nicht zu",right:"Stimme voll zu"},
+    {id:"Q157",text:"\"Die gesellschaftliche Debatte über Diskriminierung und Gleichstellung ist übertrieben.\"",type:"likert5",left:"Stimme gar nicht zu",right:"Stimme voll zu"},
+  ]},
+  {id:"S16",title:"Feedback & Kontakt",
+   description:"Haben Sie Anmerkungen oder Verbesserungsvorschläge? Alle Angaben freiwillig und anonym.",
+   questions:[
+    {id:"Q142",text:"Allgemeines Feedback (Inhalt, Fragen, Verständlichkeit):",type:"text"},
+    {id:"Q143",text:"Fehlen Ihrer Meinung nach wichtige Themen?",type:"text"},
+    {id:"Q144",text:"Wie haben Sie von dieser Umfrage erfahren?",type:"radio",opts:["Reddit","Persönliche Empfehlung","Social Media (Instagram, TikTok, X, ...)","Mastodon / Fediverse","Nachrichtenartikel / Blog","Sonstiges"]},
+  ]},
 ];
 
 const TOTAL = SECTIONS.reduce((a,s) => a + s.questions.length, 0);
@@ -921,14 +1022,18 @@ export default function App() {
   const [sendError, setSendError] = useState(null);
   const [showJSON, setShowJSON]   = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
-  const scrollRef = useRef(null); // owns the scroll container
+  const scrollRef    = useRef(null);
+  const startedAtRef = useRef(null);   // Timestamp erste Antwort (ms)
+  const [shareDuration, setShareDuration] = useState(false);
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterConsent, setNewsletterConsent] = useState(false);
 
   // ── Load saved state (non-blocking, fires in background) ──
   useEffect(() => {
     (async () => {
-      try { const r = await window.storage.get("survey_v1_resp"); if (r?.value) setResp(JSON.parse(r.value)); } catch {}
-      try { const r = await window.storage.get("survey_v1_id");   if (r?.value) setSurveyId(r.value); else window.storage.set("survey_v1_id", surveyId).catch(()=>{}); } catch {}
-      try { const r = await window.storage.get("survey_v1_sub");  if (r?.value === "1") setSubmitted(true); } catch {}
+      try { const r = await storage.get("survey_v1_resp"); if (r?.value) setResp(JSON.parse(r.value)); } catch {}
+      try { const r = await storage.get("survey_v1_id");   if (r?.value) setSurveyId(r.value); else storage.set("survey_v1_id", surveyId).catch(()=>{}); } catch {}
+      try { const r = await storage.get("survey_v1_sub");  if (r?.value === "1") setSubmitted(true); } catch {}
     })();
   }, []); // eslint-disable-line
 
@@ -946,7 +1051,7 @@ export default function App() {
     });
   }, [resp]);  // eslint-disable-line
   useEffect(() => {
-    window.storage.set("survey_v1_resp", JSON.stringify(resp)).catch(() => {});
+    storage.set("survey_v1_resp", JSON.stringify(resp)).catch(() => {});
   }, [resp]);
 
   const answered   = Object.keys(resp).length;
@@ -956,21 +1061,31 @@ export default function App() {
   const secVisible = sec.questions.filter(q => !skippedIds.has(q.id));
   const secDone    = secVisible.filter(q => resp[q.id] !== undefined).length;
 
-  const setR = (id, v) => setResp(p => v === undefined ? (({ [id]: _, ...r }) => r)(p) : { ...p, [id]: v });
+  // Sektionen die mindestens eine sichtbare Frage haben
+  const visibleSecIdxs = SECTIONS
+    .map((s, i) => i)
+    .filter(i => SECTIONS[i].questions.some(q => !skippedIds.has(q.id)));
 
-  // ── Navigation with scroll-to-top ──
+  // Position des aktuellen si in den sichtbaren Sektionen
+  const viPos = visibleSecIdxs.indexOf(si);
+
+  const setR = (id, v) => {
+    if (startedAtRef.current === null && v !== undefined) {
+      startedAtRef.current = Date.now();
+    }
+    setResp(p => v === undefined ? (({ [id]: _, ...r }) => r)(p) : { ...p, [id]: v });
+  };
+
+  // ── Navigation – springt nur zu sichtbaren Sektionen ──
   const go = d => {
-    setSi(p => Math.max(0, Math.min(SECTIONS.length - 1, p + d)));
-    setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    }, 30);
+    const nextPos = Math.max(0, Math.min(visibleSecIdxs.length - 1, viPos + d));
+    setSi(visibleSecIdxs[nextPos]);
+    setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, 30);
   };
 
   const jumpTo = i => {
     setSi(i);
-    setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    }, 30);
+    setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, 30);
   };
 
   // ── JSON export – show in modal (works everywhere incl. iOS) ──
@@ -980,24 +1095,44 @@ export default function App() {
   const doSubmit = async () => {
     setSending(true);
     setSendError(null);
+    const durationSec = (startedAtRef.current !== null && shareDuration)
+      ? Math.round((Date.now() - startedAtRef.current) / 1000)
+      : 0;
     try {
       const normalized = normalizeResponses(resp, SECTIONS);
       const res = await fetch(SERVER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: surveyId,
-          schema_hash: SCHEMA_HASH,
+          id:           surveyId,
+          schema_hash:  SCHEMA_HASH,
           submitted_at: new Date().toISOString(),
-          version: "1.0.0",
+          version:      "1.0.0",
           lang,
           answered,
-          total: TOTAL,
-          responses: normalized,
+          total:        TOTAL,
+          duration_seconds: durationSec,
+          responses:    normalized,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      window.storage.set("survey_v1_sub", "1").catch(() => {});
+
+      // Newsletter: separat senden, komplett entkoppelt von Umfragedaten
+      // Keine Survey-ID wird mitgeschickt → Anonymität bleibt gewahrt
+      if (newsletterConsent && newsletterEmail.includes("@")) {
+        fetch(`${SERVER_URL.replace("/api/survey", "/api/newsletter")}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email:      newsletterEmail.trim().toLowerCase(),
+            consent_at: new Date().toISOString(),
+            lang,
+            // Absichtlich kein survey_id – würde Anonymität brechen
+          }),
+        }).catch(() => {}); // Newsletter-Fehler soll Submit nicht blockieren
+      }
+
+      storage.set("survey_v1_sub", "1").catch(() => {});
       setSubmitted(true);
       setModal(false);
     } catch (e) {
@@ -1009,20 +1144,44 @@ export default function App() {
 
   // ── Success screen ──
   if (submitted && !modal) return (
-    <div style={{ minHeight: "100vh", background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui", padding: "24px" }}>
-      <div style={{ maxWidth: "460px", textAlign: "center" }}>
-        <div style={{ fontSize: "56px", marginBottom: "16px" }}>✓</div>
-        <h1 style={{ fontSize: "22px", color: "#166534", margin: "0 0 12px" }}>{t.thanksTitle}</h1>
-        <p style={{ color: "#4d7c5f", lineHeight: 1.6, margin: "0 0 8px", fontSize: "14px" }}>
-          {t.thanksBody}
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "system-ui", padding: "24px" }}>
+      <div style={{ maxWidth: "480px", width: "100%", textAlign: "center" }}>
+        {/* Checkmark */}
+        <div style={{ width: "72px", height: "72px", borderRadius: "50%", background: "#dcfce7", border: "2px solid #86efac", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "32px", marginBottom: "20px" }}>
+          ✓
+        </div>
+
+        <h1 style={{ fontSize: "24px", color: "#14532d", margin: "0 0 10px", fontWeight: "700" }}>
+          Vielen Dank für deinen Beitrag!
+        </h1>
+        <p style={{ color: "#166534", lineHeight: 1.7, margin: "0 0 6px", fontSize: "15px" }}>
+          Jede Teilnahme hilft dabei, ein realistischeres Bild der Gesellschaft zu zeichnen.
         </p>
-        <p style={{ color: "#86a394", fontSize: "12px", margin: "0 0 28px" }}>
-          {t.thanksNote}
+        <p style={{ color: "#4d7c5f", lineHeight: 1.6, margin: "0 0 20px", fontSize: "13px" }}>
+          Deine Antworten wurden anonym übermittelt – ohne IP-Adresse, ohne Tracking.
         </p>
-        <button onClick={() => setSubmitted(false)}
-          style={{ padding: "9px 20px", border: "1px solid #bbf7d0", borderRadius: "8px", background: "#fff", color: "#166534", cursor: "pointer", fontSize: "13px" }}>
-          {t.viewAgain}
-        </button>
+
+        {/* Teilen-Hinweis */}
+        <div style={{ background: "#fff", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "16px 18px", marginBottom: "20px", textAlign: "left" }}>
+          <p style={{ margin: "0 0 8px", fontSize: "13px", fontWeight: "600", color: "#14532d" }}>
+            🙏 Weitersagen macht den Unterschied
+          </p>
+          <p style={{ margin: 0, fontSize: "12px", color: "#4d7c5f", lineHeight: 1.6 }}>
+            Die Aussagekraft der Studie wächst mit der Vielfalt der Teilnehmenden.
+            Besonders wertvoll sind Menschen, die nicht typischerweise an Online-Umfragen teilnehmen.
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+          <button onClick={() => setSubmitted(false)}
+            style={{ padding: "9px 18px", border: "1px solid #bbf7d0", borderRadius: "8px", background: "#fff", color: "#166534", cursor: "pointer", fontSize: "13px" }}>
+            Antworten ansehen
+          </button>
+        </div>
+
+        <p style={{ marginTop: "24px", fontSize: "11px", color: "#86a394" }}>
+          survey.muehrke.de · Anonym · Open Source
+        </p>
       </div>
     </div>
   );
@@ -1051,39 +1210,107 @@ export default function App() {
       })()}
 
       {/* Submit modal */}
-      {modal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-          <div style={{ background: "#fff", borderRadius: "16px", padding: "24px", maxWidth: "400px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.25)" }}>
-            <h2 style={{ margin: "0 0 16px", fontSize: "18px", color: "#0f172a" }}>{t.modalTitle}</h2>
-            <div style={{ fontSize: "13px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px 14px", color: "#166534", lineHeight: 1.6, marginBottom: "14px" }}>
-              {t.privacyNote}
-            </div>
-            <div style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "18px" }}>
-              {t.answered(answered, TOTAL)}
-            </div>
-            {submitted && (
-              <div style={{ fontSize: "12px", color: "#d97706", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "6px", padding: "8px 12px", marginBottom: "14px" }}>
-                {t.dupWarning}
+      {modal && (() => {
+        const durationSec = startedAtRef.current !== null
+          ? Math.round((Date.now() - startedAtRef.current) / 1000) : 0;
+        const durationMin = Math.floor(durationSec / 60);
+        const durationLabel = durationSec < 60
+          ? `${durationSec} Sekunden`
+          : durationMin === 1 ? `1 Minute` : `${durationMin} Minuten`;
+        const emailValid = newsletterEmail.includes("@") && newsletterEmail.includes(".");
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+            <div style={{ background: "#fff", borderRadius: "16px", padding: "22px", maxWidth: "420px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,.25)", maxHeight: "90vh", overflowY: "auto" }}>
+
+              <h2 style={{ margin: "0 0 14px", fontSize: "18px", color: "#0f172a" }}>{t.modalTitle}</h2>
+
+              {/* Datenschutz */}
+              <div style={{ fontSize: "12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px 13px", color: "#166534", lineHeight: 1.6, marginBottom: "12px" }}>
+                {t.privacyNote}
               </div>
-            )}
-            {sendError && (
-              <div style={{ fontSize: "13px", color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px", marginBottom: "14px" }}>
-                {sendError}
+
+              {/* Fortschritt */}
+              <div style={{ fontSize: "12px", color: "#94a3b8", marginBottom: "14px" }}>
+                {t.answered(answered, TOTAL)}
               </div>
-            )}
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => { setModal(false); setSendError(null); }}
-                style={{ flex: 1, padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", background: "#fff", cursor: "pointer", fontSize: "14px", color: "#374151" }}>
-                {t.cancel}
-              </button>
-              <button onClick={doSubmit} disabled={sending}
-                style={{ flex: 2, padding: "10px", border: "none", borderRadius: "8px", background: sending ? "#94a3b8" : "#3b82f6", color: "#fff", cursor: sending ? "not-allowed" : "pointer", fontSize: "14px", fontWeight: "600" }}>
-                {sending ? t.sending : t.submit}
-              </button>
+
+              {/* Duplikat-Warnung */}
+              {submitted && (
+                <div style={{ fontSize: "12px", color: "#d97706", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px" }}>
+                  {t.dupWarning}
+                </div>
+              )}
+
+              {/* ── Ausfülldauer ── */}
+              {durationSec > 10 && (
+                <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px" }}>
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={shareDuration} onChange={e => setShareDuration(e.target.checked)}
+                      style={{ accentColor: "#3b82f6", marginTop: "2px", flexShrink: 0 }} />
+                    <span style={{ fontSize: "12px", color: "#475569", lineHeight: 1.6 }}>
+                      Du hast <strong style={{ color: "#1e293b" }}>{durationLabel}</strong> gebraucht –
+                      darf ich das teilen um die Zeitschätzung für andere zu verbessern?{" "}
+                      <span style={{ color: "#94a3b8" }}>(freiwillig, geht anonym mit)</span>
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {/* ── Newsletter opt-in ── */}
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", marginBottom: "14px" }}>
+                <p style={{ margin: "0 0 8px", fontSize: "12px", fontWeight: "600", color: "#374151" }}>
+                  📬 Auf dem Laufenden bleiben <span style={{ fontWeight: "400", color: "#94a3b8" }}>(optional)</span>
+                </p>
+                <p style={{ margin: "0 0 10px", fontSize: "11px", color: "#64748b", lineHeight: 1.5 }}>
+                  Wenn die Ergebnisse ausgewertet sind, schicke ich eine kurze Nachricht –
+                  ca. 1–2 Mails pro Jahr, kein Spam, jederzeit abbestellbar.
+                  Die E-Mail wird <strong>komplett getrennt</strong> von den Umfragedaten gespeichert.
+                </p>
+                <input type="email" value={newsletterEmail}
+                  onChange={e => setNewsletterEmail(e.target.value)}
+                  placeholder="deine@email.de"
+                  style={{ width: "100%", padding: "8px 11px", border: `1px solid ${newsletterEmail && !emailValid ? "#fca5a5" : "#e2e8f0"}`, borderRadius: "7px", fontSize: "13px", outline: "none", boxSizing: "border-box", marginBottom: "8px", fontFamily: "inherit" }} />
+                {newsletterEmail.length > 0 && (
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: "8px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={newsletterConsent} onChange={e => setNewsletterConsent(e.target.checked)}
+                      style={{ accentColor: "#3b82f6", marginTop: "2px", flexShrink: 0 }} />
+                    <span style={{ fontSize: "11px", color: "#64748b", lineHeight: 1.5 }}>
+                      Ich stimme zu, dass meine E-Mail-Adresse für Benachrichtigungen zu dieser Studie
+                      gespeichert wird und kann diese Einwilligung jederzeit widerrufen.
+                    </span>
+                  </label>
+                )}
+              </div>
+
+              {/* Fehler */}
+              {sendError && (
+                <div style={{ fontSize: "13px", color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px", marginBottom: "12px" }}>
+                  {sendError}
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={() => { setModal(false); setSendError(null); }}
+                  style={{ flex: 1, padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", background: "#fff", cursor: "pointer", fontSize: "13px", color: "#374151" }}>
+                  {t.cancel}
+                </button>
+                <button onClick={doSubmit} disabled={sending || (newsletterEmail.length > 0 && !emailValid)}
+                  style={{ flex: 2, padding: "10px", border: "none", borderRadius: "8px",
+                    background: sending ? "#94a3b8" : (newsletterEmail.length > 0 && !emailValid) ? "#e2e8f0" : "#3b82f6",
+                    color: (newsletterEmail.length > 0 && !emailValid) ? "#94a3b8" : "#fff",
+                    cursor: sending || (newsletterEmail.length > 0 && !emailValid) ? "not-allowed" : "pointer",
+                    fontSize: "13px", fontWeight: "600" }}>
+                  {sending ? t.sending : t.submit}
+                </button>
+              </div>
+              {newsletterEmail.length > 0 && !emailValid && (
+                <p style={{ margin: "6px 0 0", fontSize: "11px", color: "#ef4444", textAlign: "center" }}>Bitte eine gültige E-Mail-Adresse eingeben</p>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Sticky header */}
       <div style={{ position: "sticky", top: 0, zIndex: 20, background: "#fff", borderBottom: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
@@ -1110,13 +1337,14 @@ export default function App() {
         </div>
       </div>
 
-      {/* Section tabs */}
+      {/* Section tabs – nur Sektionen mit sichtbaren Fragen */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", overflowX: "auto" }}>
         <div style={{ maxWidth: "720px", margin: "0 auto", padding: "8px 16px", display: "flex", gap: "4px", whiteSpace: "nowrap" }}>
-          {SECTIONS.map((s, i) => {
+          {visibleSecIdxs.map(i => {
+            const s    = SECTIONS[i];
             const vis  = s.questions.filter(q => !skippedIds.has(q.id));
             const done = vis.filter(q => resp[q.id] !== undefined).length;
-            const full = vis.length > 0 && done === vis.length;
+            const full = done === vis.length;
             return (
               <button key={s.id} onClick={() => jumpTo(i)}
                 style={{ padding: "5px 10px", borderRadius: "6px", border: "none", fontSize: "11px", fontWeight: "600", cursor: "pointer", background: i === si ? "#3b82f6" : full ? "#f0fdf4" : "#f8fafc", color: i === si ? "#fff" : full ? "#16a34a" : "#64748b" }}>
@@ -1149,7 +1377,7 @@ export default function App() {
             const skipped = skippedIds.has(q.id);
             return (
               <div key={q.id} style={{
-                overflow: "hidden",
+                overflow: skipped ? "hidden" : "visible",
                 maxHeight: skipped ? "0" : "2000px",
                 opacity: skipped ? 0 : 1,
                 marginBottom: skipped ? "-16px" : "0",
@@ -1175,8 +1403,8 @@ export default function App() {
 
         {/* Navigation */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "32px", paddingTop: "20px", borderTop: "1px solid #e2e8f0", gap: "8px" }}>
-          <button onClick={() => go(-1)} disabled={si === 0}
-            style={{ padding: "9px 18px", fontSize: "13px", fontWeight: "600", border: "1px solid #e2e8f0", borderRadius: "8px", background: "#fff", cursor: si === 0 ? "not-allowed" : "pointer", opacity: si === 0 ? 0.4 : 1, color: "#374151" }}>
+          <button onClick={() => go(-1)} disabled={viPos === 0}
+            style={{ padding: "9px 18px", fontSize: "13px", fontWeight: "600", border: "1px solid #e2e8f0", borderRadius: "8px", background: "#fff", cursor: viPos === 0 ? "not-allowed" : "pointer", opacity: viPos === 0 ? 0.4 : 1, color: "#374151" }}>
             {t.back}
           </button>
 
@@ -1204,7 +1432,7 @@ export default function App() {
             )}
           </div>
 
-          {si < SECTIONS.length - 1 ? (
+          {viPos < visibleSecIdxs.length - 1 ? (
             <button onClick={() => go(1)}
               style={{ padding: "9px 18px", fontSize: "13px", fontWeight: "600", border: "none", borderRadius: "8px", background: "#3b82f6", color: "#fff", cursor: "pointer" }}>
               {t.next}
@@ -1218,7 +1446,7 @@ export default function App() {
         </div>
 
         <p style={{ textAlign: "center", fontSize: "11px", color: "#cbd5e1", marginTop: "16px" }}>
-          {t.section(si + 1, SECTIONS.length)}
+          {t.section(viPos + 1, visibleSecIdxs.length)}
         </p>
       </div>
     </div>

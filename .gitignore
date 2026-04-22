@@ -1,2 +1,26 @@
-.org/*
+# Python
+__pycache__/
+*.py[cod]
+.env
+venv/
+.venv/
 
+# Node / React
+node_modules/
+dist/
+
+.DS_Store
+
+# Secrets – NEVER commit
+*.pem
+*.key
+
+# Survey data
+/var/data/
+
+# Logs
+*.log
+
+# Editor
+.vscode/
+.idea/
