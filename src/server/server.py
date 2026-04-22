@@ -82,7 +82,7 @@ QUESTION_TYPES: dict[str, str] = {
                                           76,77,78,79,80,81,82,83,84,85,86,87,88,
                                           89,90,91,95,106,115,116,117,118,119,120,123,125,126,130,
                                           132,134,135,137,138,141,151,152,153,154,155,156,157,]},
-    **{f"Q{i:03d}": "int1-7"  for i in [29, 30, 66, 132]},
+    **{f"Q{i:03d}": "int1-7"  for i in [29, 30, 66, 133]},
     **{f"Q{i:03d}": "int0-10" for i in [104]},
     # list = Mehrfachauswahl (Q010 jetzt auch list)
     **{f"Q{i:03d}": "list"    for i in [10, 15, 22, 40, 63, 67, 92, 108, 136, 140, 146, 148]},
@@ -111,8 +111,8 @@ def validate_responses(responses: dict) -> list[str]:
         return errors  # früh abbrechen
 
     for qid, val in responses.items():
-        # Keine Angabe ist immer gültig
-        if val == KA_VALUE:
+        # Keine Angabe und übersprungene Fragen sind immer gültig
+        if val == KA_VALUE or val == "__skipped__":
             continue
         if val is None:
             continue
