@@ -228,9 +228,6 @@ sudo chmod 640 /opt/survey-server/admin/index.html /opt/survey-server/results/in
 ```ini
 # Own domain only:
 Environment=SURVEY_ALLOWED_ORIGINS=https://survey.muehrke.de
-
-# Claude Artifact or multiple domains:
-Environment=SURVEY_ALLOWED_ORIGINS=*
 ```
 
 ```bash
