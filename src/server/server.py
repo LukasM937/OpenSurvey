@@ -31,7 +31,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 # ── Konfiguration ─────────────────────────────────────────────
 
-DATA_DIR        = Path(os.getenv("SURVEY_DATA_DIR",      "/var/data/umfrage")).resolve()
+DATA_DIR        = Path(os.getenv("SURVEY_DATA_DIR",      "/var/data/survey")).resolve()
 MAX_BODY_BYTES  = int(os.getenv("SURVEY_MAX_BODY",        str(512 * 1024)))
 MAX_JSON_DEPTH  = int(os.getenv("SURVEY_MAX_DEPTH",       "12"))
 MAX_FILES       = int(os.getenv("SURVEY_MAX_FILES",       "50000"))
@@ -267,7 +267,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Vorteil:
 #   - Zeitliche Filterung per Verzeichnis ohne Datei-Parsing
 #   - Vergangene Monate per `chattr +a <monat-dir>` immutable setzbar
-#   - `ls /var/data/umfrage/2025-04/ | wc -l` gibt April-Einreichungen
+#   - `ls /var/data/survey/2025-04/ | wc -l` gibt April-Einreichungen
 
 def get_month_dir(dt: datetime) -> Path:
     """Gibt das Monatsverzeichnis zurück und erstellt es bei Bedarf."""

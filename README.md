@@ -123,10 +123,10 @@ deploy/
 sudo useradd -r -s /sbin/nologin -d /opt/survey-server umfrage
 sudo useradd -r -m -s /bin/bash newsletter
 
-sudo mkdir -p /opt/survey-server /var/data/umfrage /var/data/newsletter /etc/survey
+sudo mkdir -p /opt/survey-server /var/data/survey /var/data/newsletter /etc/survey
 
-sudo chown umfrage:umfrage /var/data/umfrage && sudo chmod 700 /var/data/umfrage
-sudo chattr +a /var/data/umfrage        # append-only
+sudo chown umfrage:umfrage /var/data/survey && sudo chmod 700 /var/data/survey
+sudo chattr +a /var/data/survey        # append-only
 
 sudo chown newsletter:newsletter /var/data/newsletter && sudo chmod 730 /var/data/newsletter
 sudo usermod -aG newsletter umfrage
@@ -244,7 +244,7 @@ Key environment variables:
 | `FRIENDLYCAPTCHA_API_KEY` | *(required in prod)* | Secret API key from FriendlyCaptcha dashboard |
 | `FRIENDLYCAPTCHA_SITEKEY` | *(required in prod)* | Public sitekey — also used in frontend |
 | `FRIENDLYCAPTCHA_ENDPOINT` | `https://global.frcapi.com/...` | Override with EU endpoint if desired |
-| `SURVEY_DATA_DIR` | `/var/data/umfrage` | Directory where survey JSON files are stored |
+| `SURVEY_DATA_DIR` | `/var/data/survey` | Directory where survey JSON files are stored |
 | `NEWSLETTER_DATA_FILE` | `/var/data/newsletter/subscribers.ndjson` | Encrypted subscriber list |
 | `NEWSLETTER_PUB_KEY` | `/etc/survey/newsletter_pub.pem` | RSA public key for newsletter encryption |
 | `SURVEY_ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins |
@@ -333,9 +333,9 @@ curl http://localhost:8742/admin/api/stats -H "X-Admin-Token: <token>"
 curl http://localhost:8742/results/api/stats
 
 # Clean up test submission
-sudo chattr -a /var/data/umfrage
-sudo find /var/data/umfrage -name "*test001*" -delete
-sudo chattr +a /var/data/umfrage
+sudo chattr -a /var/data/survey
+sudo find /var/data/survey -name "*test001*" -delete
+sudo chattr +a /var/data/survey
 ```
 
 > In production, `POST /api/survey` and `POST /api/newsletter` require a valid
