@@ -8,7 +8,7 @@ User=umfrage
 Group=umfrage
 WorkingDirectory=/opt/survey-server
 
-Environment=SURVEY_DATA_DIR=/var/data/umfrage
+Environment=SURVEY_DATA_DIR=/var/data/survey
 Environment=SURVEY_ALLOWED_ORIGINS=*
 
 # [A] --proxy-headers + --forwarded-allow-ips ist ZWINGEND erforderlich.
@@ -33,7 +33,7 @@ RestartSec=5
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
-ReadWritePaths=/var/data/umfrage
+ReadWritePaths=/var/data/survey /var/data/newsletter
 
 # Kein Zugriff auf Home-Verzeichnisse anderer User
 ProtectHome=yes

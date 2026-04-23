@@ -95,12 +95,13 @@ def _region_groups(records: list[dict]) -> dict[str, list[dict]]:
 
 
 def _cached(key: str, builder):
+    # Double-checked locking: hold the lock for both read and write so only
+    # one caller ever runs builder() — prevents thundering herd on cache miss.
     with _cache_lock:
         entry = _cache.get(key)
         if entry and time.monotonic() - entry["ts"] < CACHE_TTL:
             return entry["data"]
-    data = builder()
-    with _cache_lock:
+        data = builder()
         _cache[key] = {"ts": time.monotonic(), "data": data}
     return data
 
@@ -174,46 +175,48 @@ def get_export_dataset(data_dir: Path) -> dict:
     Free text (Q052, Q064) and PLZ (Q121) are excluded.
     Timestamps are rounded to YYYY-MM only.
     """
-    records = _load_records(data_dir)
-    n       = len(records)
-    regions = _region_groups(records)
+    def build():
+        records = _load_records(data_dir)
+        n       = len(records)
+        regions = _region_groups(records)
 
-    national_agg = _agg_records(records, skip=SKIP_IN_EXPORT)
+        national_agg = _agg_records(records, skip=SKIP_IN_EXPORT)
 
-    regional: dict[str, Any] = {}
-    suppressed: list[str]    = []
-    for region, recs in sorted(regions.items()):
-        if region in ("__ka__", "__skipped__", "None"):
-            continue
-        if len(recs) >= K_ANON_THRESHOLD:
-            regional[region] = {
-                "n":         len(recs),
-                "questions": _agg_records(recs, skip=SKIP_IN_EXPORT | {REGION_QUESTION}),
-            }
-        else:
-            suppressed.append(region)
+        regional: dict[str, Any] = {}
+        suppressed: list[str]    = []
+        for region, recs in sorted(regions.items()):
+            if region in ("__ka__", "__skipped__", "None"):
+                continue
+            if len(recs) >= K_ANON_THRESHOLD:
+                regional[region] = {
+                    "n":         len(recs),
+                    "questions": _agg_records(recs, skip=SKIP_IN_EXPORT | {REGION_QUESTION}),
+                }
+            else:
+                suppressed.append(region)
 
-    return {
-        "meta": {
-            "total_submissions":     n,
-            "k_anonymity_threshold": K_ANON_THRESHOLD,
-            "excluded_questions":    sorted(SKIP_IN_EXPORT),
-            "suppressed_regions":    suppressed,
-            "notes": [
-                "Free-text answers (Q052, Q064) and postal codes (Q121) are excluded.",
-                f"Regional data only provided for regions with >= {K_ANON_THRESHOLD} submissions.",
-                "Suppressed regions are included in national totals but not listed individually.",
-                "Timestamps are rounded to YYYY-MM to reduce re-identification risk.",
-            ],
-        },
-        "national": {
-            "n":        n,
-            "by_month": _monthly_counts(records),
-            "by_lang":  _lang_counts(records),
-            "questions": national_agg,
-        },
-        "regional": regional,
-    }
+        return {
+            "meta": {
+                "total_submissions":     n,
+                "k_anonymity_threshold": K_ANON_THRESHOLD,
+                "excluded_questions":    sorted(SKIP_IN_EXPORT),
+                "suppressed_regions":    suppressed,
+                "notes": [
+                    "Free-text answers (Q052, Q064) and postal codes (Q121) are excluded.",
+                    f"Regional data only provided for regions with >= {K_ANON_THRESHOLD} submissions.",
+                    "Suppressed regions are included in national totals but not listed individually.",
+                    "Timestamps are rounded to YYYY-MM to reduce re-identification risk.",
+                ],
+            },
+            "national": {
+                "n":        n,
+                "by_month": _monthly_counts(records),
+                "by_lang":  _lang_counts(records),
+                "questions": national_agg,
+            },
+            "regional": regional,
+        }
+    return _cached(f"export:{data_dir}", build)
 
 
 def invalidate_cache() -> None:
