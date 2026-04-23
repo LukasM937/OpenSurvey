@@ -17,6 +17,8 @@ import os
 import re
 import shutil
 import time
+import urllib.error
+import urllib.request
 from base64 import b64encode
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -43,6 +45,12 @@ NEWSLETTER_FILE     = Path(os.getenv("NEWSLETTER_DATA_FILE",
                       "/var/data/newsletter/subscribers.ndjson"))
 NEWSLETTER_PUB_KEY  = Path(os.getenv("NEWSLETTER_PUB_KEY",
                       "/etc/survey/newsletter_pub.pem"))
+# Friendly Captcha v2 — set both vars to enable; leave empty to disable (dev mode)
+CAPTCHA_API_KEY  = os.getenv("FRIENDLYCAPTCHA_API_KEY",  "")
+CAPTCHA_SITEKEY  = os.getenv("FRIENDLYCAPTCHA_SITEKEY",  "")
+# Use the EU endpoint if your data must stay in the EU, otherwise global
+CAPTCHA_ENDPOINT = os.getenv("FRIENDLYCAPTCHA_ENDPOINT",
+                   "https://global.frcapi.com/api/v2/captcha/siteverify")
 # Tailscale CGNAT range; must match Apache's "Require ip 100.64.0.0/10"
 _TAILSCALE_NET = ipaddress.ip_network("100.64.0.0/10")
 
@@ -50,11 +58,66 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("umfrage")
 
+if not CAPTCHA_API_KEY:
+    log.warning("FRIENDLYCAPTCHA_API_KEY not set – captcha verification disabled (dev mode)")
+
 try:
     import aggregator as _aggregator
 except ImportError:
     _aggregator = None  # type: ignore
     log.warning("aggregator.py not found – /admin and /results endpoints disabled")
+
+
+# ── Friendly Captcha v2 verification ─────────────────────────
+#
+# If CAPTCHA_API_KEY is not set the check is skipped — useful during
+# local development. In production both env vars must be present.
+#
+# The frontend must include the Friendly Captcha widget and submit the
+# solved token in the JSON body under the key "frc-captcha-response".
+
+def _verify_captcha(token: str | None, ip: str) -> None:
+    """Raise HTTPException(400) if the captcha token is missing or invalid."""
+    if not CAPTCHA_API_KEY:
+        return  # dev mode — skip
+
+    if not token or not isinstance(token, str) or len(token) > 2048:
+        log.warning("captcha-missing  ip=%s", ip)
+        raise HTTPException(400, "Captcha fehlt oder ungültig")
+
+    payload = json.dumps({"response": token, "sitekey": CAPTCHA_SITEKEY}).encode()
+    req = urllib.request.Request(
+        CAPTCHA_ENDPOINT,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Accept":       "application/json",
+            "X-Api-Key":    CAPTCHA_API_KEY,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        body = exc.read()
+        try:
+            result = json.loads(body)
+        except Exception:
+            result = {}
+        log.warning("captcha-api-error  ip=%s  status=%s  body=%s",
+                    ip, exc.code, body[:200])
+    except Exception as exc:
+        # Network failure — fail open so the server stays usable if FriendlyCaptcha
+        # has an outage. Change to fail closed by raising HTTPException here if
+        # you prefer strict mode.
+        log.error("captcha-network-error  ip=%s  err=%s", ip, exc)
+        return
+
+    if not result.get("success"):
+        errors = result.get("errors", [])
+        log.warning("captcha-fail  ip=%s  errors=%s", ip, errors)
+        raise HTTPException(400, "Captcha-Lösung ungültig – bitte erneut versuchen")
 
 # ── [F] Kanonisches Schema ─────────────────────────────────────
 #
@@ -107,7 +170,7 @@ QUESTION_TYPES: dict[str, str] = {
                                           21,23,24,28,37,38,41,42,43,44,45,46,47,48,49,
                                           52,64,72,74,75,93,94,96,97,98,99,100,101,102,103,
                                           105,107,109,110,111,112,114,121,122,127,128,129,
-                                          131,139,142,143,144,145,151,]},
+                                          131,139,142,143,144,145,]},
 }
 
 KA_VALUE = "__ka__"
@@ -181,6 +244,21 @@ app.add_middleware(
     allow_methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response as StarletteResponse
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next) -> StarletteResponse:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"]        = "DENY"
+        response.headers["Referrer-Policy"]        = "no-referrer"
+        response.headers["Permissions-Policy"]     = "interest-cohort=()"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # ── Monatlicher Unterordner ───────────────────────────────────
 #
@@ -280,9 +358,13 @@ async def receive_survey(request: Request) -> JSONResponse:
     if "application/json" not in request.headers.get("content-type", ""):
         raise HTTPException(415, "Content-Type muss application/json sein")
 
-    cl = request.headers.get("content-length")
-    if cl and int(cl) > MAX_BODY_BYTES:
-        raise HTTPException(413, "Payload zu groß")
+    cl = request.headers.get("content-length", "")
+    if cl:
+        # Guard against absurdly long content-length strings before int() conversion
+        if len(cl) > 12 or not cl.isdigit():
+            raise HTTPException(400, "Ungültiger Content-Length-Header")
+        if int(cl) > MAX_BODY_BYTES:
+            raise HTTPException(413, "Payload zu groß")
     raw = await request.body()
     if len(raw) > MAX_BODY_BYTES:
         raise HTTPException(413, "Payload zu groß")
@@ -298,6 +380,9 @@ async def receive_survey(request: Request) -> JSONResponse:
         check_depth(body)
     except ValueError:
         raise HTTPException(400, "JSON-Struktur zu komplex")
+
+    # Captcha verification (skipped in dev mode if CAPTCHA_API_KEY is unset)
+    _verify_captcha(body.get("frc-captcha-response"), ip)
 
     # [F] Schema-Hash prüfen
     client_hash = str(body.get("schema_hash", ""))
@@ -320,7 +405,7 @@ async def receive_survey(request: Request) -> JSONResponse:
         raise HTTPException(400, "Fehlende oder ungültige id")
 
     # Whitelist top-level fields — reject payloads with unknown keys
-    known_fields = {"id", "schema_hash", "responses", "lang"}
+    known_fields = {"id", "schema_hash", "responses", "lang", "frc-captcha-response"}
     unknown_fields = set(body.keys()) - known_fields
     if unknown_fields:
         raise HTTPException(400, f"Unbekannte Felder: {sorted(unknown_fields)[:5]}")
@@ -536,9 +621,12 @@ async def newsletter_signup(request: Request) -> JSONResponse:
     if "application/json" not in request.headers.get("content-type", ""):
         raise HTTPException(415, "Content-Type muss application/json sein")
 
-    cl = request.headers.get("content-length")
-    if cl and int(cl) > 4096:
-        raise HTTPException(413, "Payload zu groß")
+    cl = request.headers.get("content-length", "")
+    if cl:
+        if len(cl) > 12 or not cl.isdigit():
+            raise HTTPException(400, "Ungültiger Content-Length-Header")
+        if int(cl) > 4096:
+            raise HTTPException(413, "Payload zu groß")
     raw = await request.body()
     if len(raw) > 4096:
         raise HTTPException(413, "Payload zu groß")
@@ -549,6 +637,9 @@ async def newsletter_signup(request: Request) -> JSONResponse:
         raise HTTPException(400, "Ungültiges JSON")
     if not isinstance(body, dict):
         raise HTTPException(400, "Erwartet ein JSON-Objekt")
+
+    # Captcha before any expensive processing
+    _verify_captcha(body.get("frc-captcha-response"), ip)
 
     email = body.get("email", "")
     if not isinstance(email, str) or not _EMAIL_RE.fullmatch(email.strip()):
@@ -569,9 +660,11 @@ async def newsletter_signup(request: Request) -> JSONResponse:
         log.error("newsletter pubkey not available – signup rejected")
         raise HTTPException(503, "Newsletter-Dienst nicht verfügbar")
 
-    now_utc    = datetime.now(timezone.utc)
-    stored_at  = now_utc.isoformat()
-    consent_at = str(body.get("consent_at", stored_at))[:64]
+    now_utc = datetime.now(timezone.utc)
+    # consent_at is always server-generated — never trust the client's clock
+    # for GDPR audit trail purposes
+    consent_at = now_utc.isoformat()
+    stored_at  = consent_at
 
     payload = {"email": email, "lang": safe_lang, "consent_at": consent_at}
     entry   = _encrypt_newsletter_entry(pubkey, payload)
@@ -579,9 +672,16 @@ async def newsletter_signup(request: Request) -> JSONResponse:
 
     NEWSLETTER_FILE.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(entry, ensure_ascii=False)
+    # fcntl.flock provides cross-process safety (threading.Lock alone is not enough
+    # if uvicorn is ever started with multiple workers)
+    import fcntl
     with _newsletter_lock:
         with open(NEWSLETTER_FILE, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                f.write(line + "\n")
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
 
     log.info("newsletter  ip=%s  lang=%s", ip, safe_lang)
     return JSONResponse({"status": "ok"})
