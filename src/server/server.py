@@ -10,12 +10,14 @@ Neu in v4:
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import os
 import re
 import shutil
 import time
+from base64 import b64encode
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,8 +39,12 @@ RATE_LIMIT_WIN  = int(os.getenv("SURVEY_RATE_LIMIT_WIN",  "60"))
 ALLOWED_ORIGINS  = os.getenv("SURVEY_ALLOWED_ORIGINS",     "*").split(",")
 ADMIN_TOKEN      = os.getenv("ADMIN_TOKEN",                "")
 STATIC_DIR       = Path(os.getenv("STATIC_DIR", str(Path(__file__).parent))).resolve()
-NEWSLETTER_FILE  = Path(os.getenv("NEWSLETTER_DATA_FILE",
-                   "/var/data/newsletter/subscribers.ndjson"))
+NEWSLETTER_FILE     = Path(os.getenv("NEWSLETTER_DATA_FILE",
+                      "/var/data/newsletter/subscribers.ndjson"))
+NEWSLETTER_PUB_KEY  = Path(os.getenv("NEWSLETTER_PUB_KEY",
+                      "/etc/survey/newsletter_pub.pem"))
+# Tailscale CGNAT range; must match Apache's "Require ip 100.64.0.0/10"
+_TAILSCALE_NET = ipaddress.ip_network("100.64.0.0/10")
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -313,6 +319,18 @@ async def receive_survey(request: Request) -> JSONResponse:
     if not safe_id:
         raise HTTPException(400, "Fehlende oder ungültige id")
 
+    # Whitelist top-level fields — reject payloads with unknown keys
+    known_fields = {"id", "schema_hash", "responses", "lang"}
+    unknown_fields = set(body.keys()) - known_fields
+    if unknown_fields:
+        raise HTTPException(400, f"Unbekannte Felder: {sorted(unknown_fields)[:5]}")
+
+    # Validate lang if present: BCP-47 short tag, e.g. "de", "en", "fr-CH"
+    lang_raw = body.get("lang", "de")
+    if not isinstance(lang_raw, str) or not re.fullmatch(r"[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})?", lang_raw):
+        raise HTTPException(400, "Ungültiger lang-Wert")
+    safe_lang = lang_raw[:10]
+
     guard_resources()
 
     # Zeitstempel einmalig festlegen
@@ -335,20 +353,25 @@ async def receive_survey(request: Request) -> JSONResponse:
         log.info("duplicate  id=%s", safe_id)
         return JSONResponse({"status": "duplicate", "message": "Bereits eingereicht"})
 
-    body["_received_at"] = ts_iso
-    body["_month"]       = now_utc.strftime("%Y-%m")
-    body.pop("schema_hash", None)
+    # Only store whitelisted, validated fields
+    stored = {
+        "id":           safe_id,
+        "lang":         safe_lang,
+        "responses":    responses,
+        "_received_at": ts_iso,
+        "_month":       now_utc.strftime("%Y-%m"),
+    }
 
     try:
         fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(body, f, ensure_ascii=False, indent=2)
+            json.dump(stored, f, ensure_ascii=False, indent=2)
     except FileExistsError:
         log.info("duplicate-race  id=%s", safe_id)
         return JSONResponse({"status": "duplicate", "message": "Bereits eingereicht"})
 
     increment_file_count()
-    log.info("ok  id=%s  month=%s  n=%d", safe_id, body["_month"], len(responses))
+    log.info("ok  id=%s  month=%s  n=%d", safe_id, stored["_month"], len(responses))
     return JSONResponse({"status": "ok"})
 
 
@@ -375,13 +398,19 @@ async def health(request: Request) -> JSONResponse:
 # ── Admin helpers ─────────────────────────────────────────────
 
 def _is_local(ip: str) -> bool:
-    """True for localhost and Tailscale IPs (100.x.x.x)."""
-    return ip in ("127.0.0.1", "::1") or ip.startswith("100.")
+    """True for localhost and Tailscale IPs within 100.64.0.0/10."""
+    if ip in ("127.0.0.1", "::1"):
+        return True
+    try:
+        return ipaddress.ip_address(ip) in _TAILSCALE_NET
+    except ValueError:
+        return False
 
 def _verify_admin(token: str) -> None:
     if not ADMIN_TOKEN:
         raise HTTPException(503, "Admin nicht konfiguriert (ADMIN_TOKEN nicht gesetzt)")
     if not hmac.compare_digest(token or "", ADMIN_TOKEN):
+        log.warning("admin-auth-failure  token_prefix=%s", (token or "")[:4])
         raise HTTPException(401, "Ungültiger Admin-Token")
 
 def _newsletter_count() -> int:
@@ -389,6 +418,47 @@ def _newsletter_count() -> int:
         return sum(1 for ln in NEWSLETTER_FILE.read_text().splitlines() if ln.strip())
     except Exception:
         return -1
+
+
+def _load_newsletter_pubkey():
+    """Load RSA public key for newsletter encryption. Returns None if not configured."""
+    if not NEWSLETTER_PUB_KEY.exists():
+        return None
+    try:
+        from cryptography.hazmat.primitives import serialization
+        return serialization.load_pem_public_key(NEWSLETTER_PUB_KEY.read_bytes())
+    except Exception as exc:
+        log.error("newsletter pubkey load failed: %s", exc)
+        return None
+
+
+def _encrypt_newsletter_entry(pubkey, payload: dict) -> dict:
+    """Encrypt payload dict with AES-256-GCM, wrap key with RSA-OAEP."""
+    import os as _os
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding as _padding
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    aes_key = _os.urandom(32)
+    nonce   = _os.urandom(12)
+    aesgcm  = AESGCM(aes_key)
+    plaintext = json.dumps(payload, ensure_ascii=False).encode()
+    ciphered  = aesgcm.encrypt(nonce, plaintext, None)
+
+    enc_key = pubkey.encrypt(
+        aes_key,
+        _padding.OAEP(
+            mgf=_padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
+    return {
+        "encrypted": True,
+        "enc_key":   b64encode(enc_key).decode(),
+        "nonce":     b64encode(nonce).decode(),
+        "enc_data":  b64encode(ciphered).decode(),
+    }
 
 
 # ── Admin endpoints ───────────────────────────────────────────
@@ -409,9 +479,11 @@ async def admin_stats(
     request: Request,
     x_admin_token: str = Header(default=""),
 ) -> JSONResponse:
-    if not _is_local(get_ip(request)):
+    ip = get_ip(request)
+    if not _is_local(ip):
         raise HTTPException(404)
     _verify_admin(x_admin_token)
+    log.info("admin-stats  ip=%s", ip)
     if _aggregator is None:
         raise HTTPException(503, "aggregator.py nicht verfügbar")
     stats = _aggregator.get_admin_stats(DATA_DIR)
@@ -423,9 +495,11 @@ async def admin_export(
     request: Request,
     x_admin_token: str = Header(default=""),
 ) -> JSONResponse:
-    if not _is_local(get_ip(request)):
+    ip = get_ip(request)
+    if not _is_local(ip):
         raise HTTPException(404)
     _verify_admin(x_admin_token)
+    log.info("admin-export  ip=%s", ip)
     if _aggregator is None:
         raise HTTPException(503, "aggregator.py nicht verfügbar")
     return JSONResponse(_aggregator.get_export_dataset(DATA_DIR))
@@ -436,11 +510,80 @@ async def admin_invalidate_cache(
     request: Request,
     x_admin_token: str = Header(default=""),
 ) -> JSONResponse:
-    if not _is_local(get_ip(request)):
+    ip = get_ip(request)
+    if not _is_local(ip):
         raise HTTPException(404)
     _verify_admin(x_admin_token)
+    log.info("admin-invalidate-cache  ip=%s", ip)
     if _aggregator:
         _aggregator.invalidate_cache()
+    return JSONResponse({"status": "ok"})
+
+
+# ── Newsletter signup ─────────────────────────────────────────
+
+_EMAIL_RE = re.compile(r"[^@\s]{1,64}@[^@\s]{1,255}\.[^@\s]{1,63}", re.ASCII)
+_newsletter_lock = Lock()
+
+
+@app.post("/api/newsletter")
+async def newsletter_signup(request: Request) -> JSONResponse:
+    ip = get_ip(request)
+
+    if is_rate_limited(ip):
+        raise HTTPException(429, "Zu viele Anfragen")
+
+    if "application/json" not in request.headers.get("content-type", ""):
+        raise HTTPException(415, "Content-Type muss application/json sein")
+
+    cl = request.headers.get("content-length")
+    if cl and int(cl) > 4096:
+        raise HTTPException(413, "Payload zu groß")
+    raw = await request.body()
+    if len(raw) > 4096:
+        raise HTTPException(413, "Payload zu groß")
+
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Ungültiges JSON")
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Erwartet ein JSON-Objekt")
+
+    email = body.get("email", "")
+    if not isinstance(email, str) or not _EMAIL_RE.fullmatch(email.strip()):
+        raise HTTPException(422, "Ungültige E-Mail-Adresse")
+    email = email.strip().lower()
+
+    consent = body.get("consent", False)
+    if consent is not True:
+        raise HTTPException(422, "Einwilligung erforderlich")
+
+    lang_raw = body.get("lang", "de")
+    if not isinstance(lang_raw, str) or not re.fullmatch(r"[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})?", lang_raw):
+        lang_raw = "de"
+    safe_lang = lang_raw[:10]
+
+    pubkey = _load_newsletter_pubkey()
+    if pubkey is None:
+        log.error("newsletter pubkey not available – signup rejected")
+        raise HTTPException(503, "Newsletter-Dienst nicht verfügbar")
+
+    now_utc    = datetime.now(timezone.utc)
+    stored_at  = now_utc.isoformat()
+    consent_at = str(body.get("consent_at", stored_at))[:64]
+
+    payload = {"email": email, "lang": safe_lang, "consent_at": consent_at}
+    entry   = _encrypt_newsletter_entry(pubkey, payload)
+    entry["_stored_at"] = stored_at
+
+    NEWSLETTER_FILE.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(entry, ensure_ascii=False)
+    with _newsletter_lock:
+        with open(NEWSLETTER_FILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+
+    log.info("newsletter  ip=%s  lang=%s", ip, safe_lang)
     return JSONResponse({"status": "ok"})
 
 
@@ -456,7 +599,9 @@ async def results_page() -> FileResponse:
 
 
 @app.get("/results/api/stats")
-async def results_stats() -> JSONResponse:
+async def results_stats(request: Request) -> JSONResponse:
+    if is_rate_limited(get_ip(request)):
+        raise HTTPException(429, "Zu viele Anfragen")
     if _aggregator is None:
         raise HTTPException(503, "aggregator.py nicht verfügbar")
     return JSONResponse(_aggregator.get_public_stats(DATA_DIR))
