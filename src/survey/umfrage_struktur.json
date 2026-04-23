@@ -4,7 +4,7 @@
     "subtitle": "Politik · Gesellschaft · Lebensverhältnisse",
     "version": "1.0.0-alpha",
     "notice": "Alle Fragen sind freiwillig. 'Keine Angabe' ist immer eine gültige Antwort. Die Umfrage ist anonym.",
-    "total_questions": 107
+    "total_questions": 157
   },
   "question_types": {
     "radio": "Einfachauswahl",
@@ -13,22 +13,28 @@
     "slider7": "7-Punkte-Schieberegler",
     "number": "Numerische Eingabe",
     "text": "Freitext",
-    "scale10": "0-10 Skala (SOEP-Standard)"
+    "scale10": "0-10 Skala (SOEP-Standard)",
+    "party_single": "Parteiauswahl (Einfach, Combobox)",
+    "party_multi": "Parteiauswahl (Mehrfach, Combobox)",
+    "plz": "Postleitzahl (5 Ziffern)"
   },
+  "parties": ["CDU","CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Freie Wähler","Volt","SSW","Piraten","ÖDP","Tierschutzpartei","Die PARTEI","Humanisten","WerteUnion","Bündnis Deutschland","Die Basis","MLPD","DKP","Die Heimat","BIG","MERA25","Bündnis C","DSU","APPD","Gesundheitsforschung","LIEBE"],
   "sections": [
     {
       "id": "S01", "title": "Soziodemographie",
       "questions": [
         {"id":"Q001","text":"Wie alt sind Sie?","type":"number","unit":"Jahre","min":16,"max":110},
-        {"id":"Q002","text":"Welchem Geschlecht fühlen Sie sich zugehörig (zugeordnetes Geschlecht)?","type":"radio","opts":["Männlich","Weiblich","Divers","Nicht-binär","Genderfluid","Sonstiges"]},
+        {"id":"Q002","text":"Welchem Geschlecht fühlen Sie sich zugehörig?","type":"radio","opts":["Männlich","Weiblich","Divers","Nicht-binär","Genderfluid","Sonstiges"]},
         {"id":"Q003","text":"Welches Geschlecht wurde Ihnen bei der Geburt zugewiesen?","type":"radio","opts":["Männlich","Weiblich","Divers/Inter"]},
+        {"id":"Q122","text":"Romantische / sexuelle Orientierung:","type":"radio","opts":["Heterosexuell / heteroromantisch","Homosexuell / homoromantisch (schwul/lesbisch)","Bisexuell / biromantisch","Pansexuell / panromantisch","Asexuell / aromantisch","Demisexuell / demiroromantisch","Queer (nicht näher spezifiziert)","Sonstiges"]},
         {"id":"Q004","text":"In welchem Bundesland wohnen Sie?","type":"radio","opts":["Baden-Württemberg","Bayern","Berlin","Brandenburg","Bremen","Hamburg","Hessen","Mecklenburg-Vorpommern","Niedersachsen","Nordrhein-Westfalen","Rheinland-Pfalz","Saarland","Sachsen","Sachsen-Anhalt","Schleswig-Holstein","Thüringen","Außerhalb Deutschlands"]},
         {"id":"Q005","text":"Wie groß ist Ihre Wohngemeinde?","type":"radio","opts":["< 5.000 (Dorf)","5.000–20.000 (Kleinstadt)","20.000–100.000 (Mittelstadt)","100.000–500.000 (Großstadt)","> 500.000 (Metropole)"]},
+        {"id":"Q121","text":"Postleitzahl Ihres Wohnorts:","type":"plz"},
         {"id":"Q006","text":"Wie groß ist Ihr Arbeitsort?","type":"radio","opts":["< 5.000","5.000–20.000","20.000–100.000","100.000–500.000","> 500.000","Homeoffice / kein fester Ort","Nicht erwerbstätig"]},
         {"id":"Q007","text":"Höchster Schulabschluss?","type":"radio","opts":["Kein Abschluss","Hauptschulabschluss","Mittlere Reife","Fachhochschulreife","Abitur","Noch in Schulausbildung"]},
         {"id":"Q008","text":"Hochschulabschluss?","type":"radio","opts":["Nein","Bachelor","Master / Diplom / Magister","Promotion","Noch im Studium"]},
         {"id":"Q009","text":"Berufs- oder Handwerksausbildung?","type":"radio","opts":["Nein","Ja, abgeschlossen","In Ausbildung","Meister / Techniker"]},
-        {"id":"Q010","text":"Berufsstatus?","type":"radio","opts":["Vollzeit (Angestellt)","Teilzeit (Angestellt)","Minijob","Selbstständig","Beamt:in","Ausbildung / Studium","Arbeitssuchend","Elternzeit / Familienarbeit","Rentner:in / Pensioniert","Sonstiges"]},
+        {"id":"Q010","text":"Berufsstatus (Mehrfachauswahl – alles Zutreffende):","type":"check","opts":["Vollzeit (Angestellt)","Teilzeit (Angestellt)","Werkstudent:in","Minijob / Nebenjob","Selbstständig","Beamt:in","Ausbildung / Studium","Arbeitssuchend","Elternzeit / Familienarbeit","Rentner:in / Pensioniert","Sonstiges"]},
         {"id":"Q011","text":"Tätigkeitssektor?","type":"radio","opts":["Öffentlicher Dienst","Privater Sektor","Non-Profit / NGO","Selbstständig ohne AN","Nicht anwendbar"]}
       ]
     },
@@ -38,7 +44,7 @@
         {"id":"Q012","text":"Beziehungsstatus?","type":"radio","opts":["Single","In Beziehung (nicht zusammenlebend)","Zusammenlebend (unverheiratet)","Verheiratet","Eingetragene Lebenspartnerschaft","Getrennt lebend","Geschieden","Verwitwet"]},
         {"id":"Q013","text":"Haushaltsform?","type":"radio","opts":["Alleinlebend","Paar ohne Kinder","Kernfamilie","Patchworkfamilie","Mehrgenerationenhaushalt","Alleinerziehend","WG","Sonstiges"]},
         {"id":"Q014","text":"Anzahl Kinder im Haushalt?","type":"number","unit":"Kinder","min":0,"max":15},
-        {"id":"Q015","text":"Altersgruppen der Kinder im Haushalt (Mehrfachauswahl):","type":"check","opts":["< 3 Jahre","3–6 Jahre","6–12 Jahre","12–18 Jahre","18+ (noch im HH)"],"skip_if":{"q":"Q014","op":"eq","val":0}},
+        {"id":"Q015","text":"Altersgruppen der Kinder im Haushalt:","type":"check","opts":["< 3 Jahre","3–6 Jahre","6–12 Jahre","12–18 Jahre","18+ (noch im HH)"],"skip_if":{"q":"Q014","op":"eq","val":0}},
         {"id":"Q016","text":"Kinder außerhalb des Haushalts?","type":"radio","opts":["Nein","Ja, 1","Ja, 2","Ja, 3 oder mehr"]},
         {"id":"Q017","text":"Pflegeaufgaben für Angehörige?","type":"radio","opts":["Nein","Ja, gelegentlich","Ja, regelmäßig","Ja, Hauptpflegeperson"]},
         {"id":"Q018","text":"Anteil an Haus- und Sorgearbeit im Haushalt?","type":"radio","opts":["< 20 %","20–40 %","40–60 % (ca. gleich)","60–80 %","> 80 %","Alleinlebend / n.a."]}
@@ -52,7 +58,7 @@
         {"id":"Q021","text":"Schulden (ohne laufende Hypothek)?","type":"radio","opts":["Keine","< 5.000 €","5.000–20.000 €","20.000–50.000 €","> 50.000 €"]},
         {"id":"Q022","text":"Staatliche Transferleistungen (Mehrfachauswahl)?","type":"check","opts":["Keine","Bürgergeld","Wohngeld","Kindergeld","BAföG","Elterngeld","Pflegegeld","Erwerbsminderungsrente","Sonstige"]},
         {"id":"Q023","text":"Wohnsituation?","type":"radio","opts":["Miete","Eigentum (abbezahlt)","Eigentum (Kredit läuft)","Mietfrei (z.B. Familie)","Sonstiges"]},
-        {"id":"Q024","text":"Mietbelastung (% des HH-Einkommens)?","type":"radio","opts":["< 20 %","20–30 %","30–40 %","40–50 %","> 50 %","Eigentümer, keine Miete"]},
+        {"id":"Q024","text":"Mietbelastung (% des HH-Einkommens)?","type":"radio","opts":["< 20 %","20–30 %","30–40 %","40–50 %","> 50 %","Eigentümer, keine Miete"],"skip_if":{"q":"Q023","op":"in","val":["Eigentum (abbezahlt)","Eigentum (Kredit läuft)"]}},
         {"id":"Q025","text":"Finanzielle Lage heute vs. vor 5 Jahren?","type":"likert5","left":"Stark verschlechtert","right":"Stark verbessert"},
         {"id":"Q026","text":"Erwartung für die nächsten 5 Jahre?","type":"likert5","left":"Stark verschlechtern","right":"Stark verbessern"},
         {"id":"Q027","text":"Im Vergleich zu Eltern im gleichen Alter?","type":"likert5","left":"Deutlich schlechter","right":"Deutlich besser"},
@@ -60,35 +66,35 @@
       ]
     },
     {
-      "id": "S04", "title": "Politische Orientierung & Wahlverhalten",
+      "id": "S04", "title": "Politische Orientierung",
       "questions": [
-        {"id":"Q029","text":"Politische Grundhaltung:","type":"slider7","left":"Sehr konservativ","right":"Sehr progressiv","note":"Konservativ = Bewahrung von Tradition; Progressiv = Wandel, Erneuerung"},
+        {"id":"Q029","text":"Politische Grundhaltung:","type":"slider7","left":"Sehr konservativ","right":"Sehr progressiv","note":"Konservativ = Bewahrung; Progressiv = Wandel, Erneuerung"},
         {"id":"Q030","text":"Haltung zu staatlicher Autorität:","type":"slider7","left":"Sehr autoritär","right":"Sehr libertär","note":"Autoritär = starker Staat, kollektive Werte; Libertär = individuelle Freiheit"},
-        {"id":"Q031","text":"„Politiker müssen immer den Willen des Volkes umsetzen."","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu","group_header":"Populismus-Skala – Wie sehr stimmen Sie folgenden Aussagen zu?"},
-        {"id":"Q032","text":"„Das Volk, nicht Politiker, sollte die wichtigsten Entscheidungen treffen."","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
-        {"id":"Q033","text":"„Die Kluft zwischen normalen Bürgern und der Elite ist größer als die zwischen den Bürgern selbst."","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
-        {"id":"Q034","text":"„Ich würde lieber von normalen Bürgern als von Berufspolitikern regiert werden."","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
-        {"id":"Q035","text":"„Gewählte Amtsträger reden zu viel und handeln zu wenig."","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
-        {"id":"Q036","text":"„Was man in der Politik Kompromiss nennt, ist Verrat an den eigenen Prinzipien."","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
-        {"id":"Q037","text":"Bundestagswahl 2025 – Zweitstimme:","type":"radio","opts":["CDU/CSU","SPD","Bündnis 90/Die Grünen","FDP","AfD","BSW","Die Linke","Sonstige","Nicht gewählt / nicht wahlberechtigt"],"group_header":"Wahlverhalten:"},
-        {"id":"Q038","text":"Wenn morgen Bundestagswahl: Wen würden Sie wählen?","type":"radio","opts":["CDU/CSU","SPD","Bündnis 90/Die Grünen","FDP","AfD","BSW","Die Linke","Sonstige","Würde nicht wählen"]},
+        {"id":"Q031","text":"„Politiker müssen immer den Willen des Volkes umsetzen.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu","group_header":"Populismus-Skala – Wie sehr stimmen Sie folgenden Aussagen zu?"},
+        {"id":"Q032","text":"„Das Volk, nicht Politiker, sollte die wichtigsten Entscheidungen treffen.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
+        {"id":"Q033","text":"„Die Kluft zwischen normalen Bürgern und der Elite ist größer als zwischen den Bürgern selbst.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
+        {"id":"Q034","text":"„Ich würde lieber von normalen Bürgern als von Berufspolitikern regiert werden.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
+        {"id":"Q035","text":"„Gewählte Amtsträger reden zu viel und handeln zu wenig.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
+        {"id":"Q036","text":"„Was man Kompromiss nennt, ist Verrat an den eigenen Prinzipien.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
+        {"id":"Q037","text":"Bundestagswahl 2025 – Zweitstimme:","type":"party_single","extras":["Nicht gewählt","Nicht wahlberechtigt"],"group_header":"Wahlverhalten:","skip_if":{"q":"Q109","op":"eq","val":"Nein"}},
+        {"id":"Q038","text":"Wenn morgen Bundestagswahl: Wen würden Sie wählen?","type":"party_single","extras":["Würde nicht wählen","Ungültig wählen"]},
         {"id":"Q039","text":"Wie sicher sind Sie bei dieser Wahlentscheidung?","type":"likert5","left":"Sehr unsicher","right":"Sehr sicher"},
-        {"id":"Q040","text":"Koalitionspräferenz (Mehrfachauswahl):","type":"check","opts":["CDU/CSU + SPD","CDU/CSU + Grüne","CDU/CSU + FDP","CDU/CSU + BSW","SPD + Grüne + FDP","SPD + Linke + Grüne","Minderheitsregierung","Sonstige","Egal / weiß nicht"]}
+        {"id":"Q040","text":"Koalitionspräferenz – welche Parteien sollten regieren?","type":"party_multi"}
       ]
     },
     {
       "id": "S05", "title": "Parteikompetenz",
       "description": "Welcher Partei trauen Sie bei den folgenden Themen am meisten Kompetenz zu?",
       "questions": [
-        {"id":"Q041","text":"Wirtschaft & Arbeitsmarkt","type":"radio","opts":["CDU/CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Keiner","Weiß nicht"]},
-        {"id":"Q042","text":"Innere Sicherheit & Kriminalität","type":"radio","opts":["CDU/CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Keiner","Weiß nicht"]},
-        {"id":"Q043","text":"Klimaschutz & Umwelt","type":"radio","opts":["CDU/CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Keiner","Weiß nicht"]},
-        {"id":"Q044","text":"Bildung & Schule","type":"radio","opts":["CDU/CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Keiner","Weiß nicht"]},
-        {"id":"Q045","text":"Migration & Integration","type":"radio","opts":["CDU/CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Keiner","Weiß nicht"]},
-        {"id":"Q046","text":"Soziale Gerechtigkeit & Sozialpolitik","type":"radio","opts":["CDU/CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Keiner","Weiß nicht"]},
-        {"id":"Q047","text":"Außen- & Verteidigungspolitik","type":"radio","opts":["CDU/CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Keiner","Weiß nicht"]},
-        {"id":"Q048","text":"Digitalisierung & Technologie","type":"radio","opts":["CDU/CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Keiner","Weiß nicht"]},
-        {"id":"Q049","text":"Gesundheit & Pflege","type":"radio","opts":["CDU/CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Keiner","Weiß nicht"]}
+        {"id":"Q041","text":"Wirtschaft & Arbeitsmarkt","type":"party_single","extras":["Keiner","Weiß nicht"]},
+        {"id":"Q042","text":"Innere Sicherheit & Kriminalität","type":"party_single","extras":["Keiner","Weiß nicht"]},
+        {"id":"Q043","text":"Klimaschutz & Umwelt","type":"party_single","extras":["Keiner","Weiß nicht"]},
+        {"id":"Q044","text":"Bildung & Schule","type":"party_single","extras":["Keiner","Weiß nicht"]},
+        {"id":"Q045","text":"Migration & Integration","type":"party_single","extras":["Keiner","Weiß nicht"]},
+        {"id":"Q046","text":"Soziale Gerechtigkeit & Sozialpolitik","type":"party_single","extras":["Keiner","Weiß nicht"]},
+        {"id":"Q047","text":"Außen- & Verteidigungspolitik","type":"party_single","extras":["Keiner","Weiß nicht"]},
+        {"id":"Q048","text":"Digitalisierung & Technologie","type":"party_single","extras":["Keiner","Weiß nicht"]},
+        {"id":"Q049","text":"Gesundheit & Pflege","type":"party_single","extras":["Keiner","Weiß nicht"]}
       ]
     },
     {
@@ -96,7 +102,7 @@
       "questions": [
         {"id":"Q050","text":"Zufriedenheit mit der aktuellen Bundesregierung:","type":"likert5","left":"Sehr unzufrieden","right":"Sehr zufrieden"},
         {"id":"Q051","text":"Zufriedenheit mit der Demokratie als politischem System:","type":"likert5","left":"Sehr unzufrieden","right":"Sehr zufrieden"},
-        {"id":"Q052","text":"Was stört Sie am meisten an der aktuellen Politik? (Freitext)","type":"text"},
+        {"id":"Q052","text":"Was stört Sie am meisten an der aktuellen Politik?","type":"text"},
         {"id":"Q053","text":"Bundesverfassungsgericht","type":"likert5","left":"Kein Vertrauen","right":"Volles Vertrauen","group_header":"Institutionenvertrauen – Wie viel Vertrauen haben Sie in folgende Institutionen?"},
         {"id":"Q054","text":"Polizei","type":"likert5","left":"Kein Vertrauen","right":"Volles Vertrauen"},
         {"id":"Q055","text":"Bundestag","type":"likert5","left":"Kein Vertrauen","right":"Volles Vertrauen"},
@@ -106,14 +112,14 @@
         {"id":"Q059","text":"Europäische Union","type":"likert5","left":"Kein Vertrauen","right":"Volles Vertrauen"},
         {"id":"Q060","text":"Kirchen / Religionsgemeinschaften","type":"likert5","left":"Kein Vertrauen","right":"Volles Vertrauen"},
         {"id":"Q061","text":"Wissenschaft / Universitäten","type":"likert5","left":"Kein Vertrauen","right":"Volles Vertrauen"},
-        {"id":"Q062","text":"„Den meisten Menschen kann man vertrauen."","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu","group_header":"Interpersonales Vertrauen:"},
+        {"id":"Q062","text":"„Den meisten Menschen kann man vertrauen.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu","group_header":"Interpersonales Vertrauen:"},
         {"id":"Q063","text":"Hauptinformationsquellen für Politik (Mehrfachauswahl):","type":"check","opts":["Öff.-rechtl. TV/Radio","Privates TV/Radio","Überreg. Tageszeitungen","Regionale Tageszeitungen","Nachrichtenmagazine","Social Media (TikTok, Instagram)","X / Twitter","YouTube / Podcasts","Freunde / Familie","Sonstiges"]}
       ]
     },
     {
       "id": "S07", "title": "Themen & Einstellungen",
       "questions": [
-        {"id":"Q064","text":"Die drei wichtigsten Probleme in Deutschland, die Sie beschäftigen: (Freitext)","type":"text"},
+        {"id":"Q064","text":"Die drei wichtigsten Probleme in Deutschland, die Sie beschäftigen:","type":"text"},
         {"id":"Q065","text":"Sicherheitsgefühl im Wohnumfeld:","type":"likert5","left":"Sehr unsicher","right":"Sehr sicher"},
         {"id":"Q066","text":"Haltung zu staatlicher Umverteilung vs. Eigenverantwortung:","type":"slider7","left":"Maximale Umverteilung","right":"Maximale Eigenverantwortung"},
         {"id":"Q067","text":"Politisches Engagement in den letzten 2 Jahren (Mehrfachauswahl):","type":"check","opts":["Gewählt","Demonstriert","Petition unterzeichnet","Partei/Verein beigetreten","Politiker:in kontaktiert","Online-Aktivismus","Keines davon"]}
@@ -124,7 +130,7 @@
       "questions": [
         {"id":"Q068","text":"Position zu Atomkraft (Weiterbetrieb / Neubau):","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
         {"id":"Q069","text":"Position zu erneuerbaren Energien (Ausbau Wind/Solar):","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
-        {"id":"Q070","text":"Position zu fossilen Brennstoffen (Beibehaltung in Energieversorgung):","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
+        {"id":"Q070","text":"Position zu fossilen Brennstoffen (Beibehaltung in der Energieversorgung):","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
         {"id":"Q071","text":"Position zu Elektromobilität (Förderung, Ladeinfrastruktur):","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
         {"id":"Q072","text":"Aktuelles Heizsystem im Haushalt:","type":"radio","opts":["Erdgas","Heizöl","Fernwärme","Wärmepumpe","Holz / Pellets","Nachtspeicher / Direktstrom","Sonstiges","Weiß nicht"]},
         {"id":"Q073","text":"Position zur Pflicht, beim Heizungsaustausch auf klimafreundliche Systeme umzustellen:","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
@@ -159,8 +165,8 @@
       "id": "S10", "title": "Religion & Weltanschauung",
       "questions": [
         {"id":"Q093","text":"Religiöse Zugehörigkeit:","type":"radio","opts":["Keine (konfessionslos/atheistisch)","Römisch-katholisch","Evangelisch (EKD)","Andere christliche Gemeinschaft","Islamisch (sunnitisch)","Islamisch (schiitisch/andere)","Jüdisch","Buddhistisch","Hinduistisch","Sonstige"]},
-        {"id":"Q094","text":"Häufigkeit religiöser Praxis:","type":"radio","opts":["Nie","Selten (einige Male im Jahr)","Gelegentlich (monatlich)","Regelmäßig (wöchentlich)","Sehr regelmäßig (mehrmals/Woche)"]},
-        {"id":"Q095","text":"Bedeutung von Religion in Ihrem Leben:","type":"likert5","left":"Gar nicht wichtig","right":"Sehr wichtig"}
+        {"id":"Q094","text":"Häufigkeit religiöser Praxis:","type":"radio","opts":["Nie","Selten (einige Male im Jahr)","Gelegentlich (monatlich)","Regelmäßig (wöchentlich)","Sehr regelmäßig (mehrmals/Woche)"],"skip_if":{"q":"Q093","op":"eq","val":"Keine (konfessionslos/atheistisch)"}},
+        {"id":"Q095","text":"Bedeutung von Religion in Ihrem Leben:","type":"likert5","left":"Gar nicht wichtig","right":"Sehr wichtig","skip_if":{"q":"Q093","op":"eq","val":"Keine (konfessionslos/atheistisch)"}}
       ]
     },
     {
@@ -170,12 +176,31 @@
         {"id":"Q097","text":"Geburtsland Mutter:","type":"radio","opts":["Deutschland","Anderes EU-Land","Europ. Nicht-EU-Land (inkl. Türkei)","Naher Osten / Nordafrika","Sub-Sahara-Afrika","Süd-/Zentralasien","Ostasien / Südostasien","Amerika (Nord/Süd)","Sonstiges"]},
         {"id":"Q098","text":"Geburtsland Vater:","type":"radio","opts":["Deutschland","Anderes EU-Land","Europ. Nicht-EU-Land (inkl. Türkei)","Naher Osten / Nordafrika","Sub-Sahara-Afrika","Süd-/Zentralasien","Ostasien / Südostasien","Amerika (Nord/Süd)","Sonstiges"]},
         {"id":"Q099","text":"Großeltern väterlicherseits – Migrationshintergrund?","type":"radio","opts":["Nein, beide in DE geboren","Einer von beiden zugezogen","Beide zugezogen","Weiß nicht"]},
-        {"id":"Q100","text":"Großeltern mütterlicherseits – Migrationshintergrund?","type":"radio","opts":["Nein, beide in DE geboren","Einer von beiden zugezogen","Beide zugezogen","Weiß nicht"]}
+        {"id":"Q100","text":"Großeltern mütterlicherseits – Migrationshintergrund?","type":"radio","opts":["Nein, beide in DE geboren","Einer von beiden zugezogen","Beide zugezogen","Weiß nicht"]},
+        {"id":"Q108","text":"Staatsangehörigkeit(en) (Mehrfachauswahl):","type":"check","opts":["Deutsch","Österreichisch","Schweizerisch","Türkisch","Polnisch","Russisch","Ukrainisch","Syrisch","Irakisch","Andere EU-Staatsangehörigkeit","Andere Nicht-EU-Staatsangehörigkeit"]},
+        {"id":"Q109","text":"Sind Sie für die Bundestagswahl wahlberechtigt?","type":"radio","opts":["Ja","Nein","Noch nicht (Einbürgerung läuft / zu jung)"],"skip_if":{"q":"Q108","op":"contains","val":"Deutsch"}},
+        {"id":"Q110","text":"Sind Sie für die Europawahl wahlberechtigt?","type":"radio","opts":["Ja","Nein"],"skip_if":{"q":"Q108","op":"contains","val":"Deutsch"}},
+        {"id":"Q111","text":"Streben Sie die deutsche Staatsbürgerschaft an?","type":"radio","opts":["Ja, aktiv (Antrag gestellt / in Vorbereitung)","Ja, langfristig geplant","Nein"],"skip_if":{"q":"Q108","op":"contains","val":"Deutsch"}},
+        {"id":"Q112","text":"Aufenthaltsstatus in Deutschland:","type":"radio","opts":["Niederlassungserlaubnis / Daueraufenthaltsrecht","Befristete Aufenthaltserlaubnis (Arbeit)","Befristete Aufenthaltserlaubnis (Studium / Ausbildung)","Befristete Aufenthaltserlaubnis (Familie)","Blaue Karte EU","Asylantrag gestellt (laufend)","Anerkannter Flüchtling (GFK / §3 AsylG)","Subsidiärer Schutz (§4 AsylG)","Duldung","Sonstiges"],"skip_if":{"q":"Q108","op":"contains","val":"Deutsch"}}
+      ]
+    },
+    {
+      "id": "S14", "title": "Erfahrungen in Deutschland",
+      "description": "Dieser Abschnitt richtet sich an Personen mit Geflüchteten- oder Asylstatus. Alle Angaben sind freiwillig und vollständig anonym.",
+      "questions": [
+        {"id":"Q113","text":"Wie lange leben Sie bereits in Deutschland?","type":"number","unit":"Jahre","min":0,"max":80,"skip_if":{"q":"Q112","op":"notin","val":["Asylantrag gestellt (laufend)","Anerkannter Flüchtling (GFK / §3 AsylG)","Subsidiärer Schutz (§4 AsylG)","Duldung"]}},
+        {"id":"Q114","text":"Sind Sie allein oder mit Familie geflüchtet?","type":"radio","opts":["Allein","Mit Partner:in","Mit Kindern (ohne Partner:in)","Mit Kernfamilie (Partner:in + Kinder)","Mit Eltern / Geschwistern","Sonstiges"],"skip_if":{"q":"Q112","op":"notin","val":["Asylantrag gestellt (laufend)","Anerkannter Flüchtling (GFK / §3 AsylG)","Subsidiärer Schutz (§4 AsylG)","Duldung"]}},
+        {"id":"Q115","text":"Zufriedenheit mit Deutschland als Aufnahmeland (allgemein):","type":"likert5","left":"Sehr unzufrieden","right":"Sehr zufrieden","skip_if":{"q":"Q112","op":"notin","val":["Asylantrag gestellt (laufend)","Anerkannter Flüchtling (GFK / §3 AsylG)","Subsidiärer Schutz (§4 AsylG)","Duldung"]}},
+        {"id":"Q116","text":"Zufriedenheit mit der Unterbringung (Wohnsituation):","type":"likert5","left":"Sehr unzufrieden","right":"Sehr zufrieden","skip_if":{"q":"Q112","op":"notin","val":["Asylantrag gestellt (laufend)","Anerkannter Flüchtling (GFK / §3 AsylG)","Subsidiärer Schutz (§4 AsylG)","Duldung"]}},
+        {"id":"Q117","text":"Zufriedenheit mit den staatlichen Unterstützungsleistungen:","type":"likert5","left":"Sehr unzufrieden","right":"Sehr zufrieden","skip_if":{"q":"Q112","op":"notin","val":["Asylantrag gestellt (laufend)","Anerkannter Flüchtling (GFK / §3 AsylG)","Subsidiärer Schutz (§4 AsylG)","Duldung"]}},
+        {"id":"Q118","text":"Zufriedenheit mit dem Asylverfahren (Dauer, Transparenz, Fairness):","type":"likert5","left":"Sehr unzufrieden","right":"Sehr zufrieden","skip_if":{"q":"Q112","op":"notin","val":["Asylantrag gestellt (laufend)","Anerkannter Flüchtling (GFK / §3 AsylG)","Subsidiärer Schutz (§4 AsylG)","Duldung"]}},
+        {"id":"Q119","text":"Zufriedenheit mit Zugang zu Arbeit und Ausbildung:","type":"likert5","left":"Sehr unzufrieden","right":"Sehr zufrieden","skip_if":{"q":"Q112","op":"notin","val":["Asylantrag gestellt (laufend)","Anerkannter Flüchtling (GFK / §3 AsylG)","Subsidiärer Schutz (§4 AsylG)","Duldung"]}},
+        {"id":"Q120","text":"Zufriedenheit mit Deutschkursen und sprachlicher Integration:","type":"likert5","left":"Sehr unzufrieden","right":"Sehr zufrieden","skip_if":{"q":"Q112","op":"notin","val":["Asylantrag gestellt (laufend)","Anerkannter Flüchtling (GFK / §3 AsylG)","Subsidiärer Schutz (§4 AsylG)","Duldung"]}}
       ]
     },
     {
       "id": "S12", "title": "Rechtliche Erfahrungen",
-      "description": "⚠️ Diese Umfrage ist vollständig anonym. Es werden keine personenbezogenen Daten gespeichert. 'Keine Angabe' ist selbstverständlich gültig.",
+      "description": "⚠️ Diese Umfrage ist vollständig anonym. Keine personenbezogenen Daten werden gespeichert. 'Keine Angabe' ist jederzeit gültig.",
       "questions": [
         {"id":"Q101","text":"Haben Sie jemals eine Straftat / ein Delikt begangen (unabhängig von Verfolgung)?","type":"radio","opts":["Nein","Ja, Bagatelldelikt (z.B. Schwarzfahren)","Ja, mittelschweres Vergehen","Ja, schweres Vergehen"]},
         {"id":"Q102","text":"Wurden Sie wegen einer Straftat angezeigt?","type":"radio","opts":["Nein","Ja, einmal","Ja, mehrfach"],"skip_if":{"q":"Q101","op":"eq","val":"Nein"}},
@@ -187,8 +212,60 @@
       "questions": [
         {"id":"Q104","text":"Wie zufrieden sind Sie insgesamt mit Ihrem Leben? (0 = gar nicht, 10 = vollkommen)","type":"scale10"},
         {"id":"Q105","text":"Wie oft fühlen Sie sich einsam?","type":"radio","opts":["Nie","Selten","Manchmal","Oft","Fast immer"]},
-        {"id":"Q106","text":"Stärke Ihres sozialen Netzwerks (Freunde, Familie, Bekannte):","type":"likert5","left":"Sehr schwach / isoliert","right":"Sehr stark / gut vernetzt"},
+        {"id":"Q106","text":"Stärke Ihres sozialen Netzwerks:","type":"likert5","left":"Sehr schwach / isoliert","right":"Sehr stark / gut vernetzt"},
         {"id":"Q107","text":"Kontakt zu Menschen mit anderen politischen Überzeugungen im Alltag:","type":"radio","opts":["Nie","Selten","Manchmal","Oft","Täglich"]}
+      ]
+    },
+    {
+      "id": "S15", "title": "Einstellungen & Selbstwahrnehmung",
+      "questions": [
+        {"id":"Q123","text":"Wie sicher sind Sie sich generell bei politischen Themen?","type":"likert5","left":"Sehr unsicher","right":"Sehr sicher"},
+        {"id":"Q124","text":"Wie oft ändern Sie Ihre politische Meinung nach neuen Informationen?","type":"radio","opts":["Nie","Selten","Gelegentlich","Häufig","Sehr häufig"]},
+        {"id":"Q125","text":"Wie komplex empfinden Sie politische Themen im Allgemeinen?","type":"likert5","left":"Sehr einfach","right":"Sehr komplex"},
+        {"id":"Q126","text":"Wie vertrauenswürdig sind Social Media als politische Informationsquelle?","type":"likert5","left":"Gar nicht vertrauenswürdig","right":"Sehr vertrauenswürdig"},
+        {"id":"Q127","text":"Wie oft überprüfen Sie politische Informationen aktiv (z.B. per Gegenlesen)?","type":"radio","opts":["Nie","Selten","Manchmal","Häufig","Fast immer"]},
+        {"id":"Q128","text":"Wie oft sprechen Sie aktiv über Politik im Alltag?","type":"radio","opts":["Nie","Selten (wenige Male im Jahr)","Gelegentlich (monatlich)","Häufig (wöchentlich)","Sehr häufig (täglich)"]},
+        {"id":"Q129","text":"Haben Sie schon einmal bewusst Informationen gemieden, die Ihrer Meinung widersprechen?","type":"radio","opts":["Nein, nie","Selten","Manchmal","Häufig","Ja, regelmäßig"]},
+        {"id":"Q130","text":"Wie schätzen Sie Ihre digitale Kompetenz ein?","type":"likert5","left":"Sehr gering","right":"Sehr hoch","group_header":"Digitale Kompetenz & KI:"},
+        {"id":"Q131","text":"Nutzen Sie KI-Systeme regelmäßig (z.B. Chatbots, Sprachassistenten)?","type":"radio","opts":["Nein, nie","Selten (wenige Male)","Gelegentlich (monatlich)","Häufig (wöchentlich)","Täglich"]},
+        {"id":"Q132","text":"Haltung zu KI in politischen Entscheidungsprozessen:","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
+        {"id":"Q133","text":"Was ist Ihnen wichtiger?","type":"slider7","left":"Sicherheit & Stabilität","right":"Freiheit & Selbstbestimmung","group_header":"Grundlegende Werte:"},
+        {"id":"Q134","text":"Sollte Gleichheit wichtiger sein als individuelle Leistung?","type":"likert5","left":"Leistung klar wichtiger","right":"Gleichheit klar wichtiger"},
+        {"id":"Q137","text":"Ist es fair, wenn manche Menschen deutlich mehr besitzen als andere?","type":"likert5","left":"Völlig unfair","right":"Völlig fair"},
+        {"id":"Q135","text":"Blick in die Zukunft Deutschlands:","type":"likert5","left":"Sehr pessimistisch","right":"Sehr optimistisch","group_header":"Zukunft & Bedrohungen:"},
+        {"id":"Q136","text":"Welche Bedrohung empfinden Sie als größte für Deutschland? (Mehrfachauswahl)","type":"check","opts":["Klimawandel","Migration / Überfremdung","Wirtschaftlicher Abstieg","Politischer Extremismus","Kriminalität","Staatsverschuldung","Verlust nationaler Souveränität","Krieg / geopolitische Instabilität","Soziale Spaltung","KI & Digitalisierung","Sonstiges"]},
+        {"id":"Q138","text":"Bitte wählen Sie hier „Stimme eher nicht zu\" (Qualitätsprüfung).","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu","group_header":"Qualitätsprüfung:"},
+        {"id":"Q139","text":"Haben Sie eine Beeinträchtigung?","type":"radio","opts":["Nein","Ja, leicht (z.B. Legasthenie, leichte Sehschwäche)","Ja, mittel (z.B. chronische Erkrankung, Teilbehinderung)","Ja, schwer (z.B. Schwerbehinderung)"],"group_header":"Beeinträchtigung:"},
+        {"id":"Q140","text":"Art der Beeinträchtigung (Mehrfachauswahl):","type":"check","opts":["Physisch / körperlich","Psychisch / emotional","Kognitiv / Lernbeeinträchtigung","Sensorisch (Sehen / Hören)","Sonstiges"],"skip_if":{"q":"Q139","op":"eq","val":"Nein"}},
+        {"id":"Q141","text":"Beeinflusst Ihre Beeinträchtigung Ihre Teilhabe am gesellschaftlichen Leben?","type":"likert5","left":"Gar nicht","right":"Sehr stark","skip_if":{"q":"Q139","op":"eq","val":"Nein"}}
+      ]
+    },
+    {
+      "id": "S17", "title": "Diskriminierung & Gleichstellung",
+      "description": "Diese Fragen beziehen sich auf persönliche Erfahrungen sowie gesellschaftliche Einstellungen. Alle Angaben sind freiwillig und anonym.",
+      "questions": [
+        {"id":"Q145","text":"Haben Sie in Deutschland jemals persönlich eine Benachteiligung oder Diskriminierung erlebt?","type":"radio","opts":["Nein","Ja, einmal","Ja, mehrfach","Ja, regelmäßig"]},
+        {"id":"Q146","text":"Aufgrund welcher Merkmale wurden Sie benachteiligt? (Mehrfachauswahl)","type":"check","opts":["Geschlecht / Geschlechtsidentität","Ethnische Herkunft / Hautfarbe","Nationalität / Migrationshintergrund","Religion / Weltanschauung","Sexuelle Orientierung","Alter (zu jung oder zu alt)","Beeinträchtigung / Behinderung","Soziale Herkunft / Klasse","Sprache / Akzent","Äußeres Erscheinungsbild","Sonstiges"],"skip_if":{"q":"Q145","op":"eq","val":"Nein"}},
+        {"id":"Q147","text":"In welchem Bereich wurde die Diskriminierung hauptsächlich erfahren? (Mehrfachauswahl)","type":"check","opts":["Arbeit / Bewerbung","Schule / Ausbildung / Studium","Behörden / Ämter","Wohnen / Wohnungssuche","Gesundheitsversorgung","Gastronomie / Handel / Dienstleistungen","Polizei / Justiz","Öffentlicher Raum / Alltag","Online / Social Media","Sonstiges"],"skip_if":{"q":"Q145","op":"eq","val":"Nein"}},
+        {"id":"Q148","text":"Wurde die Diskriminierung von wem ausgeübt? (Mehrfachauswahl)","type":"check","opts":["Privatpersonen / Einzelne","Arbeitgeber:in / Vorgesetzte","Behörden / staatliche Stellen","Polizei","Unternehmen / Dienstleister","Online / anonym","Sonstiges"],"skip_if":{"q":"Q145","op":"eq","val":"Nein"}},
+        {"id":"Q149","text":"Haben Sie die Diskriminierung gemeldet oder angezeigt?","type":"radio","opts":["Nein, nicht gemeldet","Ja, intern (z.B. HR, Schulleitung)","Ja, bei einer Beratungsstelle","Ja, bei der Polizei / Staatsanwaltschaft","Ja, bei einer Antidiskriminierungsstelle"],"skip_if":{"q":"Q145","op":"eq","val":"Nein"}},
+        {"id":"Q150","text":"Wie sehr hat die Erfahrung Ihr Leben beeinflusst?","type":"likert5","left":"Kaum / gar nicht","right":"Sehr stark","skip_if":{"q":"Q145","op":"eq","val":"Nein"}},
+        {"id":"Q151","text":"Ethnische Selbstidentifikation (optional, Freitext):","type":"text","group_header":"Identität:"},
+        {"id":"Q152","text":"\"Alle Beziehungsformen – unabhängig von Geschlecht, Identität oder Orientierung – sollten rechtlich gleichgestellt sein.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu","group_header":"Gleichstellungseinstellungen:"},
+        {"id":"Q153","text":"\"Erwerbs- und Sorgearbeit sollten in Beziehungen unabhängig von Geschlecht oder Rolle gleichmäßig verteilt sein.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
+        {"id":"Q154","text":"\"Menschen werden in Deutschland aufgrund ihrer Herkunft oder ethnischen Zugehörigkeit systematisch benachteiligt.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
+        {"id":"Q155","text":"\"Menschen werden in Deutschland aufgrund ihres Geschlechts oder ihrer Geschlechtsidentität systematisch benachteiligt.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
+        {"id":"Q156","text":"\"Gezielte Fördermaßnahmen (z.B. Quoten) sind ein geeignetes Mittel um strukturelle Benachteiligungen auszugleichen.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
+        {"id":"Q157","text":"\"Die gesellschaftliche Debatte über Diskriminierung und Gleichstellung ist übertrieben.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"}
+      ]
+    },
+    {
+      "id": "S16", "title": "Feedback & Kontakt",
+      "description": "Haben Sie Anmerkungen oder Verbesserungsvorschläge? Alle Angaben freiwillig und anonym.",
+      "questions": [
+        {"id":"Q142","text":"Allgemeines Feedback (Inhalt, Fragen, Verständlichkeit):","type":"text"},
+        {"id":"Q143","text":"Fehlen Ihrer Meinung nach wichtige Themen?","type":"text"},
+        {"id":"Q144","text":"Wie haben Sie von dieser Umfrage erfahren?","type":"radio","opts":["Reddit","Persönliche Empfehlung","Social Media (Instagram, TikTok, X, ...)","Mastodon / Fediverse","Nachrichtenartikel / Blog","Sonstiges"]}
       ]
     }
   ]
