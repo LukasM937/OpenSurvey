@@ -41,6 +41,8 @@ RATE_LIMIT_WIN  = int(os.getenv("SURVEY_RATE_LIMIT_WIN",  "60"))
 ALLOWED_ORIGINS  = os.getenv("SURVEY_ALLOWED_ORIGINS",     "*").split(",")
 ADMIN_TOKEN      = os.getenv("ADMIN_TOKEN",                "")
 STATIC_DIR       = Path(os.getenv("STATIC_DIR", str(Path(__file__).parent))).resolve()
+SCHEMA_FILE      = Path(os.getenv("SCHEMA_FILE",
+                   str(Path(__file__).parent.parent / "survey" / "umfrage_struktur.json")))
 NEWSLETTER_FILE     = Path(os.getenv("NEWSLETTER_DATA_FILE",
                       "/var/data/newsletter/subscribers.ndjson"))
 NEWSLETTER_PUB_KEY  = Path(os.getenv("NEWSLETTER_PUB_KEY",
@@ -603,6 +605,98 @@ async def admin_invalidate_cache(
     if _aggregator:
         _aggregator.invalidate_cache()
     return JSONResponse({"status": "ok"})
+
+
+@app.get("/admin/api/plz-stats")
+async def admin_plz_stats(
+    request: Request,
+    x_admin_token: str = Header(default=""),
+) -> JSONResponse:
+    ip = get_ip(request)
+    if not _is_local(ip):
+        raise HTTPException(404)
+    _verify_admin(x_admin_token)
+    if _aggregator is None:
+        raise HTTPException(503, "aggregator.py nicht verfügbar")
+    data = _aggregator.get_plz_stats(DATA_DIR)
+    # Strip heavy question data from summary response; client fetches export separately
+    summary = {k: v for k, v in data.items() if k != "bundles"}
+    summary["bundles"] = [
+        {k: v for k, v in b.items() if k != "questions"}
+        for b in data["bundles"]
+    ]
+    return JSONResponse(summary)
+
+
+@app.get("/admin/api/plz-export")
+async def admin_plz_export(
+    request: Request,
+    x_admin_token: str = Header(default=""),
+) -> JSONResponse:
+    ip = get_ip(request)
+    if not _is_local(ip):
+        raise HTTPException(404)
+    _verify_admin(x_admin_token)
+    if _aggregator is None:
+        raise HTTPException(503, "aggregator.py nicht verfügbar")
+    log.info("admin-plz-export  ip=%s", ip)
+    return JSONResponse(_aggregator.get_plz_export(DATA_DIR))
+
+
+@app.get("/admin/api/schema")
+async def admin_get_schema(
+    request: Request,
+    x_admin_token: str = Header(default=""),
+) -> JSONResponse:
+    ip = get_ip(request)
+    if not _is_local(ip):
+        raise HTTPException(404)
+    _verify_admin(x_admin_token)
+    if not SCHEMA_FILE.exists():
+        raise HTTPException(404, f"Schema-Datei nicht gefunden: {SCHEMA_FILE}")
+    try:
+        schema = json.loads(SCHEMA_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise HTTPException(500, f"Schema konnte nicht gelesen werden: {exc}")
+    return JSONResponse(schema)
+
+
+@app.put("/admin/api/schema")
+async def admin_put_schema(
+    request: Request,
+    x_admin_token: str = Header(default=""),
+) -> JSONResponse:
+    ip = get_ip(request)
+    if not _is_local(ip):
+        raise HTTPException(404)
+    _verify_admin(x_admin_token)
+
+    raw = await request.body()
+    if len(raw) > 2_000_000:
+        raise HTTPException(413, "Schema-Payload zu groß")
+    try:
+        schema = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Ungültiges JSON")
+    if not isinstance(schema, dict) or "sections" not in schema:
+        raise HTTPException(422, "Schema muss ein Objekt mit 'sections' sein")
+
+    try:
+        SCHEMA_FILE.write_text(
+            json.dumps(schema, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except PermissionError:
+        raise HTTPException(
+            403,
+            f"Keine Schreibrechte auf {SCHEMA_FILE}. "
+            "ReadWritePaths in der systemd-Unit anpassen.",
+        )
+    except Exception as exc:
+        raise HTTPException(500, f"Speichern fehlgeschlagen: {exc}")
+
+    log.info("admin-schema-saved  ip=%s  sections=%d", ip, len(schema.get("sections", [])))
+    return JSONResponse({"status": "ok", "path": str(SCHEMA_FILE)})
 
 
 # ── Newsletter signup ─────────────────────────────────────────

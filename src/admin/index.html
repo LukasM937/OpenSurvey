@@ -1,350 +1,1090 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Admin – Deutsche Gesellschaftsstudie</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #f5f6fa; --surface: #fff; --border: #e2e4ec;
-    --text: #1a1d2e; --muted: #6b7280; --accent: #2563eb;
-    --danger: #dc2626; --success: #16a34a;
-  }
-  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#f5f6fa; --surface:#fff; --border:#e2e4ec; --text:#1a1d2e;
+  --muted:#6b7280; --accent:#2563eb; --danger:#dc2626; --success:#16a34a;
+  --warn:#d97706;
+}
+body { font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
 
-  /* Login */
-  #login { display:flex; flex-direction:column; align-items:center; justify-content:center;
-           min-height:100vh; gap:1rem; }
-  #login h1 { font-size:1.5rem; }
-  #login input { padding:.5rem .75rem; border:1px solid var(--border); border-radius:6px;
-                 width:280px; font-size:14px; }
-  #login button { padding:.5rem 1.5rem; background:var(--accent); color:#fff;
-                  border:none; border-radius:6px; cursor:pointer; font-size:14px; }
-  #login .err { color:var(--danger); font-size:13px; }
+/* ── Login ── */
+#login { display:flex; flex-direction:column; align-items:center; justify-content:center;
+         min-height:100vh; gap:1rem; }
+#login h1 { font-size:1.5rem; }
+#login input { padding:.5rem .75rem; border:1px solid var(--border); border-radius:6px;
+               width:280px; font-size:14px; }
+#login button { padding:.5rem 1.5rem; background:var(--accent); color:#fff;
+                border:none; border-radius:6px; cursor:pointer; font-size:14px; }
+.err { color:var(--danger); font-size:13px; }
 
-  /* Layout */
-  #app { display:none; }
-  header { background:var(--surface); border-bottom:1px solid var(--border);
-           padding:.75rem 1.5rem; display:flex; align-items:center; justify-content:space-between; }
-  header h1 { font-size:1rem; font-weight:600; }
-  .hdr-actions { display:flex; gap:.5rem; }
-  .btn { padding:.35rem .85rem; border-radius:5px; cursor:pointer; font-size:13px;
-         border:1px solid var(--border); background:var(--surface); color:var(--text); }
-  .btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-  .btn-sm { padding:.2rem .6rem; font-size:12px; }
+/* ── App shell ── */
+#app { display:none; min-height:100vh; }
+header { background:var(--surface); border-bottom:1px solid var(--border);
+         padding:.6rem 1.25rem; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; }
+header h1 { font-size:.95rem; font-weight:600; }
+.hdr-right { display:flex; align-items:center; gap:.5rem; }
+#hdr-status { font-size:11px; color:var(--muted); }
 
-  main { padding:1.25rem 1.5rem; max-width:1200px; }
+/* ── Tabs ── */
+nav.tabs { background:var(--surface); border-bottom:1px solid var(--border);
+           padding:0 1.25rem; display:flex; gap:.25rem; }
+.tab { padding:.6rem .9rem; border:none; background:none; cursor:pointer; font-size:13px;
+       color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px; }
+.tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:500; }
+.tab-panel { display:none; padding:1.25rem; max-width:1200px; }
+.tab-panel.active { display:block; }
 
-  /* Cards */
-  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
-           gap:.75rem; margin-bottom:1.5rem; }
-  .card { background:var(--surface); border:1px solid var(--border); border-radius:8px;
-          padding:1rem; text-align:center; }
-  .card-val { font-size:2rem; font-weight:700; color:var(--accent); line-height:1.1; }
-  .card-lbl { color:var(--muted); font-size:12px; margin-top:.25rem; }
+/* ── Buttons ── */
+.btn { padding:.35rem .8rem; border-radius:5px; cursor:pointer; font-size:13px;
+       border:1px solid var(--border); background:var(--surface); color:var(--text);
+       display:inline-flex; align-items:center; gap:.3rem; }
+.btn:hover { background:var(--bg); }
+.btn-primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+.btn-primary:hover { background:#1d4ed8; }
+.btn-danger  { background:var(--danger); color:#fff; border-color:var(--danger); }
+.btn-sm      { padding:.2rem .55rem; font-size:12px; }
 
-  /* Sections */
-  .section { background:var(--surface); border:1px solid var(--border); border-radius:8px;
-             padding:1rem 1.25rem; margin-bottom:1rem; }
-  .section h2 { font-size:.875rem; font-weight:600; margin-bottom:.75rem;
-                padding-bottom:.5rem; border-bottom:1px solid var(--border); }
-  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+/* ── Cards ── */
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+         gap:.75rem; margin-bottom:1.25rem; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:8px;
+        padding:.875rem 1rem; text-align:center; }
+.card-val { font-size:2rem; font-weight:700; color:var(--accent); line-height:1.1; }
+.card-lbl { color:var(--muted); font-size:11px; margin-top:.2rem; }
 
-  canvas { max-height:280px; }
+/* ── Sections ── */
+.section { background:var(--surface); border:1px solid var(--border); border-radius:8px;
+           padding:1rem 1.25rem; margin-bottom:1rem; }
+.section h2 { font-size:.875rem; font-weight:600; margin-bottom:.875rem;
+              padding-bottom:.5rem; border-bottom:1px solid var(--border);
+              display:flex; align-items:center; justify-content:space-between; }
+.two-col   { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+.three-col { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; }
+@media(max-width:720px) { .two-col,.three-col { grid-template-columns:1fr; } }
+canvas { max-height:260px; }
 
-  /* Completion table */
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  th { text-align:left; padding:.35rem .5rem; color:var(--muted); font-weight:500;
-       border-bottom:1px solid var(--border); }
-  td { padding:.3rem .5rem; border-bottom:1px solid #f0f1f5; }
-  .bar-cell { width:160px; }
-  .bar { height:8px; border-radius:4px; background:var(--accent); opacity:.7; }
+/* ── Tables ── */
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { text-align:left; padding:.35rem .6rem; color:var(--muted); font-weight:500;
+     border-bottom:1px solid var(--border); white-space:nowrap; }
+td { padding:.3rem .6rem; border-bottom:1px solid #f0f1f5; }
+tr:last-child td { border-bottom:none; }
+.bar-wrap { background:#f0f1f5; border-radius:4px; height:8px; min-width:80px; }
+.bar-fill { height:8px; border-radius:4px; background:var(--accent); }
 
-  /* Question browser */
-  select { padding:.35rem .6rem; border:1px solid var(--border); border-radius:5px;
-           font-size:13px; margin-bottom:.75rem; width:100%; max-width:420px; }
+/* ── Form elements ── */
+input[type=text],input[type=number],textarea,select {
+  padding:.35rem .6rem; border:1px solid var(--border); border-radius:5px;
+  font-size:13px; font-family:inherit; width:100%; }
+textarea { resize:vertical; min-height:72px; }
+label { display:block; font-size:12px; color:var(--muted); margin-bottom:.15rem; }
+.field { margin-bottom:.75rem; }
+.field-row { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
 
-  #status { font-size:12px; color:var(--muted); }
-  .tag { display:inline-block; padding:.15rem .5rem; border-radius:4px; font-size:11px;
-         background:#eff6ff; color:var(--accent); margin-left:.5rem; }
+/* ── Badges / tags ── */
+.tag  { display:inline-block; padding:.1rem .45rem; border-radius:4px; font-size:11px;
+        background:#eff6ff; color:var(--accent); }
+.badge { display:inline-block; padding:.15rem .5rem; border-radius:10px; font-size:11px;
+         font-weight:500; }
+.badge-5 { background:#d1fae5; color:#065f46; }
+.badge-4 { background:#dbeafe; color:#1e40af; }
+.badge-3 { background:#fef9c3; color:#854d0e; }
+.badge-2 { background:#ffedd5; color:#9a3412; }
+.badge-1 { background:#fee2e2; color:#991b1b; }
+.badge-0 { background:#f3f4f6; color:#374151; }
+
+/* ── Alert banners ── */
+.alert { padding:.6rem 1rem; border-radius:6px; font-size:13px; margin-bottom:1rem; }
+.alert-warn { background:#fffbeb; border:1px solid #fcd34d; color:#78350f; }
+.alert-info { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; }
+
+/* ── Modal ── */
+.overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4);
+           z-index:100; align-items:center; justify-content:center; }
+.overlay.open { display:flex; }
+.modal { background:var(--surface); border-radius:10px; padding:1.5rem;
+         width:min(560px,94vw); max-height:90vh; overflow-y:auto;
+         box-shadow:0 20px 60px rgba(0,0,0,.2); }
+.modal h3 { font-size:1rem; font-weight:600; margin-bottom:1.25rem; }
+.modal-actions { display:flex; gap:.5rem; justify-content:flex-end; margin-top:1.25rem; }
+
+/* ── Misc ── */
+.empty { text-align:center; padding:2rem; color:var(--muted); font-size:13px; }
+.monospace { font-family:ui-monospace,monospace; font-size:12px; }
+.text-muted { color:var(--muted); }
+pre { background:var(--bg); border:1px solid var(--border); border-radius:6px;
+      padding:.75rem; font-size:12px; overflow-x:auto; white-space:pre-wrap; }
+.q-stat { display:inline-block; margin-right:1rem; font-size:12px; color:var(--muted); }
+.q-stat strong { color:var(--text); }
+#explorer-detail { min-height:200px; }
+.section-header { font-weight:600; background:var(--bg); padding:.4rem .6rem;
+                  border-radius:4px; margin:.5rem 0 .25rem; font-size:12px; color:var(--muted); }
 </style>
 </head>
 <body>
 
-<!-- Login -->
+<!-- ── Login ── -->
 <div id="login">
   <h1>Admin Dashboard</h1>
-  <p style="color:var(--muted);font-size:13px">Deutsche Gesellschaftsstudie</p>
-  <input type="password" id="token-input" placeholder="Admin-Token" autocomplete="off">
-  <button onclick="login()">Anmelden</button>
+  <p class="text-muted" style="font-size:13px">Deutsche Gesellschaftsstudie</p>
+  <input type="password" id="token-input" placeholder="Admin Token" autocomplete="off">
+  <button onclick="login()">Sign in</button>
   <span class="err" id="login-err"></span>
 </div>
 
-<!-- App -->
+<!-- ── App ── -->
 <div id="app">
   <header>
-    <div>
+    <div style="display:flex;align-items:center;gap:.75rem">
       <h1>Deutsche Gesellschaftsstudie <span class="tag">Admin</span></h1>
-      <span id="status">Lädt…</span>
+      <span id="hdr-status">Loading…</span>
     </div>
-    <div class="hdr-actions">
-      <button class="btn btn-sm" onclick="refreshCache()">Cache leeren</button>
-      <button class="btn btn-sm btn-primary" onclick="downloadExport()">Datensatz exportieren</button>
-      <button class="btn btn-sm" onclick="logout()">Abmelden</button>
+    <div class="hdr-right">
+      <button class="btn btn-sm" onclick="refreshData()">↺ Refresh</button>
+      <button class="btn btn-sm" onclick="logout()">Sign out</button>
     </div>
   </header>
 
-  <main>
-    <!-- Stats cards -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="overview"   onclick="switchTab('overview')">Overview</button>
+    <button class="tab"        data-tab="explorer"   onclick="switchTab('explorer')">Data Explorer</button>
+    <button class="tab"        data-tab="geographic" onclick="switchTab('geographic')">Geographic (PLZ)</button>
+    <button class="tab"        data-tab="export"     onclick="switchTab('export')">Export</button>
+    <button class="tab"        data-tab="questions"  onclick="switchTab('questions')">Questions</button>
+  </nav>
+
+  <!-- ── Overview ── -->
+  <div class="tab-panel active" id="tab-overview">
     <div class="cards">
-      <div class="card"><div class="card-val" id="c-total">–</div><div class="card-lbl">Einreichungen</div></div>
+      <div class="card"><div class="card-val" id="c-total">–</div><div class="card-lbl">Submissions</div></div>
       <div class="card"><div class="card-val" id="c-newsletter">–</div><div class="card-lbl">Newsletter</div></div>
-      <div class="card"><div class="card-val" id="c-month">–</div><div class="card-lbl">Aktueller Monat</div></div>
+      <div class="card"><div class="card-val" id="c-month">–</div><div class="card-lbl">This month</div></div>
       <div class="card"><div class="card-val" id="c-regions">–</div><div class="card-lbl">Bundesländer</div></div>
-      <div class="card"><div class="card-val" id="c-langs">–</div><div class="card-lbl">Sprachen</div></div>
+      <div class="card"><div class="card-val" id="c-langs">–</div><div class="card-lbl">Languages</div></div>
+      <div class="card"><div class="card-val" id="c-plz-bundles">–</div><div class="card-lbl">PLZ bundles</div></div>
     </div>
 
-    <!-- Monthly trend -->
     <div class="section">
-      <h2>Einreichungen pro Monat</h2>
+      <h2>Submissions per month</h2>
       <canvas id="monthly-chart"></canvas>
     </div>
 
-    <!-- Region + Language -->
     <div class="two-col">
       <div class="section">
-        <h2>Bundesländer</h2>
+        <h2>Bundesland distribution</h2>
         <canvas id="region-chart"></canvas>
       </div>
       <div class="section">
-        <h2>Sprachen</h2>
+        <h2>Language distribution</h2>
         <canvas id="lang-chart"></canvas>
       </div>
     </div>
 
-    <!-- Question browser -->
     <div class="section">
-      <h2>Fragen-Browser</h2>
-      <select id="q-select" onchange="renderQuestionChart()">
-        <option value="">— Frage wählen —</option>
-      </select>
-      <canvas id="q-chart"></canvas>
-    </div>
-
-    <!-- Completion rates (bottom 20) -->
-    <div class="section">
-      <h2>Niedrigste Completion Rates</h2>
+      <h2>Lowest completion rates <span style="font-weight:400;font-size:12px;color:var(--muted)">(bottom 20 questions)</span></h2>
       <table>
-        <thead><tr><th>Frage</th><th>Beantwortet</th><th class="bar-cell"></th></tr></thead>
+        <thead><tr><th>Question</th><th>Answered</th><th style="width:180px"></th></tr></thead>
         <tbody id="completion-body"></tbody>
       </table>
     </div>
-  </main>
+  </div>
+
+  <!-- ── Data Explorer ── -->
+  <div class="tab-panel" id="tab-explorer">
+    <div class="two-col" style="align-items:start">
+      <!-- Left: question list -->
+      <div class="section" style="max-height:80vh;overflow-y:auto">
+        <h2>Questions
+          <input type="text" id="q-search" placeholder="Search…" style="width:140px;font-size:12px;padding:.2rem .4rem"
+                 oninput="filterQuestions()">
+        </h2>
+        <div id="q-list"></div>
+      </div>
+      <!-- Right: question detail -->
+      <div>
+        <div class="section" id="explorer-detail">
+          <div class="empty">Select a question on the left.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Geographic (PLZ) ── -->
+  <div class="tab-panel" id="tab-geographic">
+    <div id="plz-loading" class="empty">Click "Load PLZ data" to compute geographic bundles.</div>
+    <div id="plz-content" style="display:none">
+      <div class="cards" id="plz-cards"></div>
+
+      <div class="alert alert-info" id="plz-info"></div>
+
+      <div class="section">
+        <h2>Geographic bundles
+          <button class="btn btn-sm" onclick="loadPlzData()">↺ Reload</button>
+        </h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Prefix</th><th>Resolution</th><th>n</th><th>% of total</th>
+              <th>PLZs covered</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="plz-table"></tbody>
+        </table>
+      </div>
+
+      <div class="section" id="plz-bundle-detail" style="display:none">
+        <h2 id="plz-bundle-title">Bundle detail</h2>
+        <div id="plz-bundle-body"></div>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="plz-load-btn" onclick="loadPlzData()" style="margin-top:.5rem">
+      Load PLZ data
+    </button>
+  </div>
+
+  <!-- ── Export ── -->
+  <div class="tab-panel" id="tab-export">
+    <div class="alert alert-info">
+      All exports are <strong>aggregated</strong> — no individual records. Free-text answers (Q052, Q064)
+      and postal codes (Q121) are always excluded. Timestamps are rounded to YYYY-MM.
+    </div>
+
+    <div class="two-col" style="align-items:start">
+      <div class="section">
+        <h2>Bundesland export</h2>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:.875rem">
+          Groups data by Bundesland (Q004). Regions with &lt; 50 submissions are suppressed
+          but included in the national totals.
+        </p>
+        <div id="bl-export-meta" class="text-muted" style="font-size:12px;margin-bottom:.75rem"></div>
+        <button class="btn btn-primary" onclick="downloadBundeslandExport()">
+          ↓ Download Bundesland JSON
+        </button>
+      </div>
+
+      <div class="section">
+        <h2>PLZ export <span class="tag" style="background:#d1fae5;color:#065f46">finer</span></h2>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:.875rem">
+          Groups data by postal code with iterative bundling (5→4→3→2→1 digit prefix)
+          until each group reaches ≥ 50 submissions. Provides the finest possible
+          geographic resolution while preserving k-anonymity.
+        </p>
+        <div id="plz-export-meta" class="text-muted" style="font-size:12px;margin-bottom:.75rem">
+          Load PLZ data first (Geographic tab).
+        </div>
+        <button class="btn btn-primary" onclick="downloadPlzExport()">
+          ↓ Download PLZ JSON
+        </button>
+      </div>
+    </div>
+
+    <div class="section" style="margin-top:1rem">
+      <h2>Cache</h2>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:.75rem">
+        Aggregates are cached for 5 minutes. Invalidate to force a fresh read from disk.
+      </p>
+      <button class="btn" onclick="invalidateCache()">Invalidate cache</button>
+    </div>
+  </div>
+
+  <!-- ── Questions ── -->
+  <div class="tab-panel" id="tab-questions">
+    <div class="alert alert-warn">
+      <strong>⚠ Schema changes require manual follow-up:</strong>
+      After saving, you must (1) rebuild the React frontend and (2) update
+      <code>VALID_QUESTION_IDS</code> and <code>QUESTION_TYPES</code> in <code>server.py</code>.
+      Use the "Generate server.py snippet" button to get the exact code.
+    </div>
+
+    <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="openAddQuestion()">+ Add question</button>
+      <button class="btn" onclick="openAddSection()">+ Add section</button>
+      <button class="btn" onclick="generateServerSnippet()">{ } Generate server.py snippet</button>
+      <button class="btn" onclick="saveSchema()" id="save-schema-btn" style="margin-left:auto">
+        💾 Save schema
+      </button>
+    </div>
+
+    <div id="schema-loading" class="empty">Loading schema…</div>
+    <div id="schema-content" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ── Question editor modal ── -->
+<div class="overlay" id="q-modal">
+  <div class="modal">
+    <h3 id="qm-title">Add question</h3>
+    <div class="field-row">
+      <div class="field">
+        <label>Question ID (e.g. Q158)</label>
+        <input type="text" id="qm-id" placeholder="Q158">
+      </div>
+      <div class="field">
+        <label>Section</label>
+        <select id="qm-section"></select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Question text</label>
+      <textarea id="qm-text" rows="3"></textarea>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Type</label>
+        <select id="qm-type" onchange="updateQmFields()">
+          <option value="radio">radio – single choice</option>
+          <option value="check">check – multi-select</option>
+          <option value="likert5">likert5 – 1–5 scale</option>
+          <option value="slider7">slider7 – 1–7 slider</option>
+          <option value="scale10">scale10 – 0–10 (SOEP)</option>
+          <option value="number">number – free number</option>
+          <option value="text">text – free text</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Group header (optional)</label>
+        <input type="text" id="qm-group-header" placeholder="Shown above this question">
+      </div>
+    </div>
+
+    <div id="qm-opts-group" class="field" style="display:none">
+      <label>Options (one per line)</label>
+      <textarea id="qm-opts" rows="5" placeholder="Option A&#10;Option B&#10;Option C"></textarea>
+    </div>
+
+    <div id="qm-scale-group" style="display:none">
+      <div class="field-row">
+        <div class="field"><label>Left label</label><input type="text" id="qm-left" placeholder="Very low"></div>
+        <div class="field"><label>Right label</label><input type="text" id="qm-right" placeholder="Very high"></div>
+      </div>
+      <div class="field"><label>Note (optional)</label><input type="text" id="qm-note"></div>
+    </div>
+
+    <div id="qm-num-group" style="display:none">
+      <div class="field-row">
+        <div class="field"><label>Min</label><input type="number" id="qm-min" placeholder="0"></div>
+        <div class="field"><label>Max</label><input type="number" id="qm-max" placeholder="120"></div>
+        <div class="field"><label>Unit</label><input type="text" id="qm-unit" placeholder="Jahre"></div>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:.5rem">
+      <label>Skip if (optional)</label>
+      <div class="field-row" style="grid-template-columns:1fr auto 1fr">
+        <div><label>Depends on Q-ID</label><input type="text" id="qm-skip-q" placeholder="Q014"></div>
+        <div><label>Operator</label>
+          <select id="qm-skip-op">
+            <option value="eq">eq (==)</option><option value="neq">neq (≠)</option>
+            <option value="lt">lt (&lt;)</option><option value="lte">lte (≤)</option>
+            <option value="in">in (list)</option><option value="notin">notin (not in list)</option>
+            <option value="contains">contains</option><option value="notcontains">notcontains</option>
+          </select>
+        </div>
+        <div><label>Value</label><input type="text" id="qm-skip-val" placeholder='0 or "Nein"'></div>
+      </div>
+    </div>
+
+    <div class="err" id="qm-err" style="margin-top:.5rem"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('q-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveQuestion()">Save question</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add section modal ── -->
+<div class="overlay" id="sec-modal">
+  <div class="modal">
+    <h3>Add section</h3>
+    <div class="field-row">
+      <div class="field"><label>Section ID (e.g. S18)</label><input type="text" id="sm-id" placeholder="S18"></div>
+      <div class="field"><label>Title</label><input type="text" id="sm-title" placeholder="Section title"></div>
+    </div>
+    <div class="field"><label>Description (optional)</label><textarea id="sm-desc" rows="2"></textarea></div>
+    <div class="err" id="sm-err" style="margin-top:.5rem"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('sec-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSection()">Add section</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Server.py snippet modal ── -->
+<div class="overlay" id="snippet-modal">
+  <div class="modal" style="max-width:680px">
+    <h3>server.py snippet</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:.75rem">
+      Paste this into <code>server.py</code> to keep validation in sync with the schema.
+    </p>
+    <pre id="snippet-code"></pre>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('snippet-modal')">Close</button>
+      <button class="btn btn-primary" onclick="copySnippet()">Copy to clipboard</button>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
-const API = '';  // same origin
+// ── State ──────────────────────────────────────────────────────
 let TOKEN = '';
-let STATS = null;
+let STATS = null;        // from /admin/api/stats
+let PLZ_DATA = null;     // from /admin/api/plz-stats (summary, no questions)
+let SCHEMA = null;       // from /admin/api/schema
+let EDITING_QID = null;  // null = adding new
+let EDITING_SEC = null;
 const charts = {};
 
-function getToken() { return sessionStorage.getItem('admin_token') || ''; }
+// ── Helpers ────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+function getToken()  { return sessionStorage.getItem('admin_token') || ''; }
 function setToken(t) { sessionStorage.setItem('admin_token', t); TOKEN = t; }
 
-async function apiFetch(path, method = 'GET') {
-  const r = await fetch(API + path, {
-    method,
-    headers: { 'X-Admin-Token': TOKEN }
-  });
+async function api(path, method = 'GET', body = null) {
+  const opts = { method, headers: { 'X-Admin-Token': TOKEN } };
+  if (body !== null) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opts);
   if (r.status === 401) { logout(); return null; }
-  if (!r.ok) throw new Error(await r.text());
+  if (!r.ok) { const t = await r.text(); throw new Error(t || r.statusText); }
   return r.json();
 }
 
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function barChart(canvasId, labels, data, opts = {}) {
+  destroyChart(canvasId);
+  const el = $(canvasId); if (!el) return;
+  charts[canvasId] = new Chart(el, {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: opts.colors || '#3b82f6',
+                                  borderRadius: 3, label: opts.label || '' }] },
+    options: {
+      indexAxis: opts.horizontal ? 'y' : 'x',
+      plugins: { legend: { display: !!opts.label } },
+      scales: { [opts.horizontal ? 'x' : 'y']: { beginAtZero: true } },
+      ...opts.extra
+    }
+  });
+}
+
+// ── Auth ───────────────────────────────────────────────────────
 async function login() {
-  const t = document.getElementById('token-input').value.trim();
+  const t = $('token-input').value.trim();
   if (!t) return;
   setToken(t);
   try {
-    const data = await apiFetch('/admin/api/stats');
+    const data = await api('/admin/api/stats');
     if (!data) return;
-    document.getElementById('login-err').textContent = '';
-    showApp(data);
+    $('login-err').textContent = '';
+    STATS = data;
+    $('login').style.display = 'none';
+    $('app').style.display = '';
+    renderOverview();
+    loadSchema();
   } catch(e) {
-    document.getElementById('login-err').textContent = 'Ungültiger Token oder Server nicht erreichbar.';
+    $('login-err').textContent = 'Invalid token or server unreachable.';
     sessionStorage.removeItem('admin_token');
   }
 }
+function logout() { sessionStorage.removeItem('admin_token'); location.reload(); }
+$('token-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
-function logout() {
-  sessionStorage.removeItem('admin_token');
-  location.reload();
+// ── Tabs ───────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
 }
 
-async function refreshCache() {
-  await apiFetch('/admin/api/invalidate-cache', 'POST');
-  const data = await apiFetch('/admin/api/stats');
-  if (data) { STATS = data; renderAll(); }
+// ── Refresh ────────────────────────────────────────────────────
+async function refreshData() {
+  $('hdr-status').textContent = 'Refreshing…';
+  try {
+    STATS = await api('/admin/api/stats');
+    renderOverview();
+    if (PLZ_DATA) await loadPlzData();
+    if (SCHEMA) renderSchema();
+  } catch(e) { alert('Refresh failed: ' + e.message); }
+}
+async function invalidateCache() {
+  await api('/admin/api/invalidate-cache', 'POST');
+  await refreshData();
 }
 
-async function downloadExport() {
-  const data = await apiFetch('/admin/api/export');
-  if (!data) return;
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `gesellschaftsstudie_export_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-}
-
-function showApp(data) {
-  STATS = data;
-  document.getElementById('login').style.display = 'none';
-  document.getElementById('app').style.display = '';
-  renderAll();
-}
-
-function renderAll() {
+// ── Overview ───────────────────────────────────────────────────
+function renderOverview() {
   const d = STATS;
+  if (!d) return;
   const months = d.by_month || {};
-  const monthEntries = Object.entries(months);
-  const currentMonth = new Date().toISOString().slice(0,7);
-  const thisMonth = months[currentMonth] || 0;
+  const curMonth = new Date().toISOString().slice(0,7);
 
-  // Cards
-  document.getElementById('c-total').textContent = d.total ?? '–';
-  document.getElementById('c-newsletter').textContent = d.newsletter_count >= 0 ? d.newsletter_count : '–';
-  document.getElementById('c-month').textContent = thisMonth;
-  document.getElementById('c-regions').textContent = Object.keys(d.by_region || {}).filter(k => k !== '__ka__').length;
-  document.getElementById('c-langs').textContent = Object.keys(d.by_lang || {}).length;
+  $('c-total').textContent = d.total ?? '–';
+  $('c-newsletter').textContent = d.newsletter_count >= 0 ? d.newsletter_count : '–';
+  $('c-month').textContent = months[curMonth] || 0;
+  $('c-regions').textContent = Object.keys(d.by_region || {}).filter(k => k !== '__ka__').length;
+  $('c-langs').textContent = Object.keys(d.by_lang || {}).length;
+  $('c-plz-bundles').textContent = PLZ_DATA ? PLZ_DATA.bundle_count : '–';
+  $('hdr-status').textContent = 'Updated ' + new Date().toLocaleTimeString();
 
-  const updatedAt = new Date().toLocaleTimeString('de-DE');
-  document.getElementById('status').textContent = `Aktualisiert: ${updatedAt}`;
+  // Monthly
+  const me = Object.entries(months);
+  if (me.length) barChart('monthly-chart', me.map(([k])=>k), me.map(([,v])=>v));
 
-  // Monthly chart
-  destroyChart('monthly-chart');
-  if (monthEntries.length) {
-    charts['monthly-chart'] = new Chart(document.getElementById('monthly-chart'), {
-      type: 'line',
-      data: {
-        labels: monthEntries.map(([k]) => k),
-        datasets: [{ label: 'Einreichungen', data: monthEntries.map(([,v]) => v),
-          borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.1)',
-          tension: .3, fill: true, pointRadius: 4 }]
-      },
-      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-    });
-  }
+  // Region
+  const re = Object.entries(d.by_region || {}).filter(([k])=>k!=='__ka__').sort(([,a],[,b])=>b-a);
+  if (re.length) barChart('region-chart', re.map(([k])=>k), re.map(([,v])=>v), { horizontal:true });
 
-  // Region chart
-  const regionEntries = Object.entries(d.by_region || {})
-    .filter(([k]) => k !== '__ka__')
-    .sort(([,a],[,b]) => b - a);
-  destroyChart('region-chart');
-  if (regionEntries.length) {
-    charts['region-chart'] = new Chart(document.getElementById('region-chart'), {
-      type: 'bar',
-      data: {
-        labels: regionEntries.map(([k]) => k),
-        datasets: [{ label: 'n', data: regionEntries.map(([,v]) => v),
-          backgroundColor: '#3b82f6' }]
-      },
-      options: {
-        indexAxis: 'y',
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true } }
-      }
-    });
-  }
-
-  // Lang chart
-  const langEntries = Object.entries(d.by_lang || {});
+  // Language
+  const le = Object.entries(d.by_lang || {});
   destroyChart('lang-chart');
-  if (langEntries.length) {
-    charts['lang-chart'] = new Chart(document.getElementById('lang-chart'), {
+  if (le.length) {
+    charts['lang-chart'] = new Chart($('lang-chart'), {
       type: 'doughnut',
-      data: {
-        labels: langEntries.map(([k]) => k.toUpperCase()),
-        datasets: [{ data: langEntries.map(([,v]) => v),
-          backgroundColor: ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2'] }]
-      },
-      options: { plugins: { legend: { position: 'bottom' } } }
+      data: { labels: le.map(([k])=>k.toUpperCase()),
+              datasets: [{ data: le.map(([,v])=>v),
+                backgroundColor: ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2'] }] },
+      options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
     });
   }
 
-  // Populate question selector
-  const sel = document.getElementById('q-select');
-  const existingIds = new Set([...sel.options].map(o => o.value));
-  const qids = Object.keys(d.questions || {}).sort();
-  for (const qid of qids) {
-    if (!existingIds.has(qid)) {
-      const opt = document.createElement('option');
-      opt.value = qid; opt.textContent = qid;
-      sel.appendChild(opt);
-    }
-  }
-
-  // Completion table (bottom 20)
+  // Completion table
   const comp = d.completion_rate || {};
-  const sorted = Object.entries(comp).sort(([,a],[,b]) => a - b).slice(0, 20);
-  const tbody = document.getElementById('completion-body');
+  const sorted = Object.entries(comp).sort(([,a],[,b])=>a-b).slice(0,20);
+  const tbody = $('completion-body');
   tbody.innerHTML = '';
   for (const [qid, rate] of sorted) {
     const pct = Math.round(rate * 100);
-    tbody.insertAdjacentHTML('beforeend', `
+    tbody.insertAdjacentHTML('beforeend',`
       <tr>
-        <td>${qid}</td>
+        <td class="monospace">${qid}</td>
         <td>${pct}%</td>
-        <td class="bar-cell"><div class="bar" style="width:${pct}%"></div></td>
+        <td><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div></td>
       </tr>`);
   }
 }
 
-function renderQuestionChart() {
-  const qid = document.getElementById('q-select').value;
-  destroyChart('q-chart');
-  if (!qid || !STATS?.questions?.[qid]) return;
-  const q = STATS.questions[qid];
-  const counts = q.counts || {};
-  const entries = Object.entries(counts).sort(([a],[b]) => {
-    const na = parseFloat(a), nb = parseFloat(b);
-    if (!isNaN(na) && !isNaN(nb)) return na - nb;
-    return a.localeCompare(b);
-  });
-  if (!entries.length) return;
+// ── Data Explorer ──────────────────────────────────────────────
+function buildQuestionList() {
+  if (!STATS?.questions) return;
+  const qs = STATS.questions;
+  const container = $('q-list');
+  container.innerHTML = '';
 
-  const mean = q.mean != null ? `  ⌀ ${q.mean}` : '';
-  charts['q-chart'] = new Chart(document.getElementById('q-chart'), {
-    type: 'bar',
-    data: {
-      labels: entries.map(([k]) => k.length > 30 ? k.slice(0,28)+'…' : k),
-      datasets: [{ label: `n=${q.n}${mean}`, data: entries.map(([,v]) => v),
-        backgroundColor: '#3b82f6' }]
-    },
-    options: {
-      plugins: { legend: { position: 'top' } },
-      scales: { y: { beginAtZero: true } }
+  // Group by section if schema loaded, else just list
+  if (SCHEMA?.sections) {
+    for (const sec of SCHEMA.sections) {
+      const hdr = document.createElement('div');
+      hdr.className = 'section-header'; hdr.textContent = `${sec.id} · ${sec.title}`;
+      container.appendChild(hdr);
+      for (const q of sec.questions) {
+        if (qs[q.id]) appendQItem(container, q.id, q.text);
+      }
     }
+    // Questions in stats but not in schema
+    const knownIds = new Set(SCHEMA.sections.flatMap(s=>s.questions.map(q=>q.id)));
+    const extra = Object.keys(qs).filter(id=>!knownIds.has(id)).sort();
+    if (extra.length) {
+      const hdr = document.createElement('div');
+      hdr.className = 'section-header'; hdr.textContent = 'Other / unlisted';
+      container.appendChild(hdr);
+      for (const id of extra) appendQItem(container, id, '');
+    }
+  } else {
+    for (const qid of Object.keys(qs).sort()) appendQItem(container, qid, '');
+  }
+}
+
+function appendQItem(parent, qid, text) {
+  const el = document.createElement('div');
+  el.style.cssText = 'padding:.3rem .5rem;cursor:pointer;border-radius:4px;font-size:13px';
+  el.innerHTML = `<span class="monospace" style="color:var(--accent)">${qid}</span>
+    ${text ? `<span class="text-muted" style="font-size:11px;margin-left:.4rem">${text.slice(0,50)}${text.length>50?'…':''}</span>` : ''}`;
+  el.onclick = () => showQuestionDetail(qid);
+  el.onmouseenter = () => el.style.background = 'var(--bg)';
+  el.onmouseleave = () => el.style.background = '';
+  parent.appendChild(el);
+}
+
+function filterQuestions() {
+  const q = $('q-search').value.toLowerCase();
+  $('q-list').querySelectorAll('div:not(.section-header)').forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
 }
 
-function destroyChart(id) {
-  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+function showQuestionDetail(qid) {
+  const qdata = STATS?.questions?.[qid];
+  if (!qdata) return;
+
+  const schemaQ = SCHEMA?.sections?.flatMap(s=>s.questions).find(q=>q.id===qid);
+  const counts = qdata.counts || {};
+  const entries = Object.entries(counts).sort(([a],[b]) => {
+    const na=parseFloat(a), nb=parseFloat(b);
+    return (!isNaN(na)&&!isNaN(nb)) ? na-nb : a.localeCompare(b);
+  });
+
+  const total = Object.values(counts).reduce((s,v)=>s+v,0);
+  const compRate = STATS?.completion_rate?.[qid];
+
+  $('explorer-detail').innerHTML = `
+    <h2>${qid}${schemaQ ? ` <span class="text-muted" style="font-size:12px;font-weight:400">${schemaQ.text?.slice(0,80)||''}</span>` : ''}</h2>
+    <div style="margin:.5rem 0 .875rem">
+      ${qdata.n != null ? `<span class="q-stat"><strong>${qdata.n}</strong> answers</span>` : ''}
+      ${qdata.mean != null ? `<span class="q-stat">mean <strong>${qdata.mean}</strong></span>` : ''}
+      ${qdata.median != null ? `<span class="q-stat">median <strong>${qdata.median}</strong></span>` : ''}
+      ${qdata.stdev != null ? `<span class="q-stat">σ <strong>${qdata.stdev}</strong></span>` : ''}
+      ${compRate != null ? `<span class="q-stat">completion <strong>${Math.round(compRate*100)}%</strong></span>` : ''}
+    </div>
+    ${schemaQ ? `<p style="font-size:12px;color:var(--muted);margin-bottom:.75rem">Type: <strong>${schemaQ.type}</strong>${schemaQ.skip_if?` · skip_if: ${JSON.stringify(schemaQ.skip_if)}`:''}</p>` : ''}
+    <canvas id="explorer-chart" style="max-height:240px"></canvas>
+    ${entries.length ? `
+    <table style="margin-top:.875rem">
+      <thead><tr><th>Value</th><th>n</th><th>%</th><th style="width:180px"></th></tr></thead>
+      <tbody>${entries.map(([k,v])=>`
+        <tr>
+          <td>${k.length>40?k.slice(0,38)+'…':k}</td>
+          <td>${v}</td>
+          <td>${total>0?Math.round(v/total*100):0}%</td>
+          <td><div class="bar-wrap"><div class="bar-fill" style="width:${total>0?Math.round(v/total*100):0}%"></div></div></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>` : ''}
+  `;
+
+  if (entries.length) {
+    barChart('explorer-chart',
+      entries.map(([k])=>k.length>25?k.slice(0,23)+'…':k),
+      entries.map(([,v])=>v),
+      { label: `n=${qdata.n}${qdata.mean?` · mean ${qdata.mean}`:''}` }
+    );
+  }
 }
 
-// Auto-login if token stored
-TOKEN = getToken();
-if (TOKEN) {
-  document.getElementById('token-input').value = TOKEN;
-  login();
+// ── Geographic (PLZ) ───────────────────────────────────────────
+const RES_LABELS = { 5:'5-digit (full PLZ)', 4:'4-digit prefix', 3:'3-digit prefix',
+                     2:'2-digit prefix', 1:'1-digit prefix', 0:'National pool' };
+const RES_BADGE  = { 5:'badge-5', 4:'badge-4', 3:'badge-3', 2:'badge-2', 1:'badge-1', 0:'badge-0' };
+
+async function loadPlzData() {
+  $('plz-load-btn').style.display = 'none';
+  $('plz-loading').textContent = 'Computing PLZ bundles… (may take a few seconds)';
+  try {
+    PLZ_DATA = await api('/admin/api/plz-stats');
+    if (!PLZ_DATA) return;
+    $('c-plz-bundles').textContent = PLZ_DATA.bundle_count;
+    renderPlz();
+  } catch(e) {
+    $('plz-loading').textContent = 'Error: ' + e.message;
+    $('plz-load-btn').style.display = '';
+  }
 }
 
-// Enter key on token field
-document.getElementById('token-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') login();
+function renderPlz() {
+  $('plz-loading').style.display = 'none';
+  $('plz-content').style.display = '';
+
+  const d = PLZ_DATA;
+  $('plz-info').textContent =
+    `${d.total} total submissions · ${d.plz_records} with valid PLZ · ` +
+    `${d.no_plz_records} without PLZ · ${d.bundle_count} geographic groups · ` +
+    `k-anonymity threshold: ${d.k_anon_threshold}`;
+
+  // Cards by resolution
+  const byRes = d.by_resolution || {};
+  const pc = $('plz-cards'); pc.innerHTML = '';
+  const resOrder = [5,4,3,2,1,0];
+  for (const res of resOrder) {
+    const count = byRes[String(res)] || 0;
+    if (!count) continue;
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="card-val" style="font-size:1.5rem">${count}</div>
+      <div class="card-lbl">${RES_LABELS[res]}</div>`;
+    pc.appendChild(card);
+  }
+
+  // Table
+  const tbody = $('plz-table'); tbody.innerHTML = '';
+  const bundles = d.bundles || [];
+  for (const b of bundles) {
+    const pct = d.total > 0 ? (b.n / d.total * 100).toFixed(1) : '0.0';
+    const covered = b.plzs_covered?.length || 0;
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td class="monospace"><strong>${b.prefix}</strong></td>
+        <td><span class="badge ${RES_BADGE[b.resolution]}">${RES_LABELS[b.resolution]}</span></td>
+        <td>${b.n}</td>
+        <td>${pct}%</td>
+        <td class="text-muted">${covered} PLZ${covered!==1?'s':''}</td>
+        <td><button class="btn btn-sm" onclick="showBundleDetail(${JSON.stringify(b.prefix)})">Detail</button></td>
+      </tr>`);
+  }
+
+  // Update export meta
+  $('plz-export-meta').textContent =
+    `${d.bundle_count} bundles · finest resolution where k-anon holds`;
+}
+
+async function showBundleDetail(prefix) {
+  $('plz-bundle-detail').style.display = '';
+  $('plz-bundle-title').textContent = `Bundle: ${prefix}`;
+  $('plz-bundle-body').innerHTML = '<div class="empty">Loading question data…</div>';
+
+  // The full question data is in the PLZ export endpoint
+  try {
+    const exp = await api('/admin/api/plz-export');
+    if (!exp) return;
+    const bundle = exp.geographic_groups?.find(b => b.prefix === prefix);
+    if (!bundle) { $('plz-bundle-body').innerHTML = '<div class="empty">Bundle not found.</div>'; return; }
+
+    const qs = bundle.questions || {};
+    const topQ = ['Q029','Q030','Q037','Q038','Q004','Q001','Q002'];
+    let html = `<p style="font-size:13px;color:var(--muted);margin-bottom:.875rem">
+      n = ${bundle.n} · resolution = ${RES_LABELS[bundle.resolution]}
+      · PLZs: ${(bundle.plzs_covered||[]).slice(0,10).join(', ')}${(bundle.plzs_covered||[]).length>10?' …':''}
+    </p>`;
+
+    for (const qid of [...topQ, ...Object.keys(qs).filter(q=>!topQ.includes(q)).slice(0,10)]) {
+      if (!qs[qid]) continue;
+      const q = qs[qid];
+      const entries = Object.entries(q.counts||{}).sort(([a],[b])=>{
+        const na=parseFloat(a),nb=parseFloat(b);
+        return (!isNaN(na)&&!isNaN(nb))?na-nb:a.localeCompare(b);
+      }).slice(0,8);
+      const stats = [
+        `n=${q.n}`,
+        q.mean != null ? `mean ${q.mean}` : null,
+        q.median != null ? `median ${q.median}` : null,
+      ].filter(Boolean).join(' · ');
+
+      html += `<div style="margin-bottom:.5rem">
+        <span class="monospace" style="color:var(--accent);font-size:12px">${qid}</span>
+        <span class="text-muted" style="font-size:11px;margin-left:.5rem">${stats}</span>
+        <div style="display:flex;flex-wrap:wrap;gap:.25rem .5rem;margin-top:.25rem">
+          ${entries.map(([k,v])=>`<span style="font-size:12px"><strong>${v}</strong> <span class="text-muted">${k.slice(0,20)}</span></span>`).join('')}
+        </div>
+      </div>`;
+    }
+    $('plz-bundle-body').innerHTML = html;
+    $('plz-bundle-detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch(e) {
+    $('plz-bundle-body').innerHTML = `<div class="err">Error: ${e.message}</div>`;
+  }
+}
+
+// ── Export ─────────────────────────────────────────────────────
+async function downloadBundeslandExport() {
+  try {
+    const data = await api('/admin/api/export');
+    if (!data) return;
+    const n = data.national?.n ?? '?';
+    const regions = Object.keys(data.regional||{}).length;
+    $('bl-export-meta').textContent = `n=${n} · ${regions} regions with data`;
+    triggerDownload(data, `bundesland_export_${today()}.json`);
+  } catch(e) { alert('Export failed: ' + e.message); }
+}
+
+async function downloadPlzExport() {
+  try {
+    const data = await api('/admin/api/plz-export');
+    if (!data) return;
+    const bundles = data.geographic_groups?.length ?? 0;
+    $('plz-export-meta').textContent = `${bundles} geographic bundles · see meta.by_resolution for breakdown`;
+    triggerDownload(data, `plz_export_${today()}.json`);
+  } catch(e) { alert('Export failed: ' + e.message); }
+}
+
+function triggerDownload(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+function today() { return new Date().toISOString().slice(0,10); }
+
+// ── Questions schema ───────────────────────────────────────────
+const TYPE_MAP = {
+  number:'int', likert5:'int1-5', slider7:'int1-7', scale10:'int0-10',
+  radio:'str', text:'str', check:'list', party_single:'str', party_multi:'list', plz:'str',
+};
+
+async function loadSchema() {
+  try {
+    SCHEMA = await api('/admin/api/schema');
+    if (SCHEMA) { renderSchema(); buildQuestionList(); }
+  } catch(e) {
+    $('schema-loading').textContent = 'Could not load schema: ' + e.message;
+  }
+}
+
+function renderSchema() {
+  if (!SCHEMA) return;
+  $('schema-loading').style.display = 'none';
+  $('schema-content').style.display = '';
+  const el = $('schema-content');
+  el.innerHTML = '';
+
+  for (const sec of (SCHEMA.sections || [])) {
+    const div = document.createElement('div');
+    div.className = 'section';
+    div.innerHTML = `
+      <h2>${sec.id} · ${sec.title}
+        <button class="btn btn-sm" onclick="openAddQuestionInSection('${sec.id}')">+ Question</button>
+      </h2>
+      ${sec.description ? `<p style="font-size:12px;color:var(--muted);margin-bottom:.5rem">${sec.description}</p>` : ''}
+      <table>
+        <thead><tr><th>ID</th><th>Text</th><th>Type</th><th>Skip if</th><th></th></tr></thead>
+        <tbody>${(sec.questions||[]).map(q=>`
+          <tr>
+            <td class="monospace">${q.id}</td>
+            <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.text||''}</td>
+            <td><span class="tag" style="background:#f0fdf4;color:#166534">${q.type}</span></td>
+            <td style="font-size:12px;color:var(--muted)">${q.skip_if?`${q.skip_if.q} ${q.skip_if.op} ${JSON.stringify(q.skip_if.val)}`:''}</td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-sm" onclick="openEditQuestion('${sec.id}','${q.id}')">Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteQuestion('${sec.id}','${q.id}')">✕</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    el.appendChild(div);
+  }
+}
+
+async function saveSchema() {
+  if (!SCHEMA) return;
+  try {
+    $('save-schema-btn').textContent = 'Saving…';
+    await api('/admin/api/schema', 'PUT', SCHEMA);
+    $('save-schema-btn').textContent = '✓ Saved';
+    setTimeout(() => { $('save-schema-btn').textContent = '💾 Save schema'; }, 2000);
+  } catch(e) {
+    $('save-schema-btn').textContent = '💾 Save schema';
+    alert('Save failed: ' + e.message);
+  }
+}
+
+// ── Question CRUD ──────────────────────────────────────────────
+function openAddQuestion() {
+  const firstSec = SCHEMA?.sections?.[0]?.id || '';
+  openAddQuestionInSection(firstSec);
+}
+
+function openAddQuestionInSection(secId) {
+  EDITING_QID = null; EDITING_SEC = secId;
+  resetQModal();
+  $('qm-title').textContent = 'Add question';
+  $('qm-section').value = secId;
+  $('q-modal').classList.add('open');
+}
+
+function openEditQuestion(secId, qid) {
+  EDITING_QID = qid; EDITING_SEC = secId;
+  const sec = SCHEMA.sections.find(s=>s.id===secId);
+  const q   = sec?.questions.find(q=>q.id===qid);
+  if (!q) return;
+
+  resetQModal();
+  $('qm-title').textContent = `Edit ${qid}`;
+  $('qm-id').value          = q.id;
+  $('qm-id').disabled       = true;
+  $('qm-section').value     = secId;
+  $('qm-text').value        = q.text || '';
+  $('qm-type').value        = q.type || 'radio';
+  $('qm-group-header').value= q.group_header || '';
+  updateQmFields();
+
+  if (q.opts) $('qm-opts').value = q.opts.join('\n');
+  $('qm-left').value  = q.left  || '';
+  $('qm-right').value = q.right || '';
+  $('qm-note').value  = q.note  || '';
+  $('qm-min').value   = q.min   ?? '';
+  $('qm-max').value   = q.max   ?? '';
+  $('qm-unit').value  = q.unit  || '';
+  if (q.skip_if) {
+    $('qm-skip-q').value   = q.skip_if.q   || '';
+    $('qm-skip-op').value  = q.skip_if.op  || 'eq';
+    $('qm-skip-val').value = JSON.stringify(q.skip_if.val);
+  }
+  $('q-modal').classList.add('open');
+}
+
+function resetQModal() {
+  ['qm-id','qm-text','qm-group-header','qm-opts','qm-left','qm-right',
+   'qm-note','qm-min','qm-max','qm-unit','qm-skip-q','qm-skip-val'].forEach(id => {
+    const el = $(id); if (el) { el.value = ''; el.disabled = false; }
+  });
+  $('qm-type').value = 'radio';
+  $('qm-skip-op').value = 'eq';
+  $('qm-err').textContent = '';
+  populateSectionSelect();
+  updateQmFields();
+}
+
+function populateSectionSelect() {
+  const sel = $('qm-section'); sel.innerHTML = '';
+  for (const sec of (SCHEMA?.sections || [])) {
+    const opt = document.createElement('option');
+    opt.value = sec.id; opt.textContent = `${sec.id} · ${sec.title}`;
+    sel.appendChild(opt);
+  }
+}
+
+function updateQmFields() {
+  const type = $('qm-type').value;
+  const hasOpts  = ['radio','check'].includes(type);
+  const hasScale = ['likert5','slider7','scale10'].includes(type);
+  const hasNum   = type === 'number';
+  $('qm-opts-group').style.display  = hasOpts  ? '' : 'none';
+  $('qm-scale-group').style.display = hasScale ? '' : 'none';
+  $('qm-num-group').style.display   = hasNum   ? '' : 'none';
+}
+
+function saveQuestion() {
+  $('qm-err').textContent = '';
+  const qid  = $('qm-id').value.trim().toUpperCase();
+  const text = $('qm-text').value.trim();
+  const type = $('qm-type').value;
+  const secId= $('qm-section').value;
+
+  if (!qid || !/^Q\d{3,}$/.test(qid)) {
+    $('qm-err').textContent = 'Question ID must match Q### (e.g. Q158)'; return;
+  }
+  if (!text) { $('qm-err').textContent = 'Question text is required'; return; }
+
+  // Check for duplicate ID when adding
+  if (!EDITING_QID) {
+    const exists = SCHEMA.sections.flatMap(s=>s.questions).some(q=>q.id===qid);
+    if (exists) { $('qm-err').textContent = `ID ${qid} already exists`; return; }
+  }
+
+  const q = { id: qid, text, type };
+  const gh = $('qm-group-header').value.trim();
+  if (gh) q.group_header = gh;
+
+  if (['radio','check'].includes(type)) {
+    const opts = $('qm-opts').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    if (!opts.length) { $('qm-err').textContent = 'Options are required for this type'; return; }
+    q.opts = opts;
+  }
+  if (['likert5','slider7','scale10'].includes(type)) {
+    const left = $('qm-left').value.trim(), right = $('qm-right').value.trim();
+    if (left)  q.left  = left;
+    if (right) q.right = right;
+    const note = $('qm-note').value.trim();
+    if (note) q.note = note;
+  }
+  if (type === 'number') {
+    const min = $('qm-min').value, max = $('qm-max').value, unit = $('qm-unit').value.trim();
+    if (min !== '') q.min = Number(min);
+    if (max !== '') q.max = Number(max);
+    if (unit) q.unit = unit;
+  }
+
+  const skipQ = $('qm-skip-q').value.trim();
+  if (skipQ) {
+    let skipVal;
+    try { skipVal = JSON.parse($('qm-skip-val').value); }
+    catch { skipVal = $('qm-skip-val').value; }
+    q.skip_if = { q: skipQ, op: $('qm-skip-op').value, val: skipVal };
+  }
+
+  const sec = SCHEMA.sections.find(s=>s.id===secId);
+  if (!sec) { $('qm-err').textContent = 'Section not found'; return; }
+
+  if (EDITING_QID) {
+    const idx = sec.questions.findIndex(q=>q.id===EDITING_QID);
+    if (idx >= 0) sec.questions[idx] = q;
+  } else {
+    sec.questions.push(q);
+  }
+
+  closeModal('q-modal');
+  renderSchema();
+  buildQuestionList();
+}
+
+function deleteQuestion(secId, qid) {
+  if (!confirm(`Delete ${qid}? This only removes it from the schema, not from collected data.`)) return;
+  const sec = SCHEMA.sections.find(s=>s.id===secId);
+  if (!sec) return;
+  sec.questions = sec.questions.filter(q=>q.id!==qid);
+  renderSchema();
+  buildQuestionList();
+}
+
+// ── Section CRUD ───────────────────────────────────────────────
+function openAddSection() { $('sec-modal').classList.add('open'); }
+
+function saveSection() {
+  const id    = $('sm-id').value.trim().toUpperCase();
+  const title = $('sm-title').value.trim();
+  const desc  = $('sm-desc').value.trim();
+  if (!id || !/^S\d+$/.test(id))  { $('sm-err').textContent = 'ID must match S## (e.g. S18)'; return; }
+  if (!title) { $('sm-err').textContent = 'Title is required'; return; }
+  if (SCHEMA.sections.some(s=>s.id===id)) { $('sm-err').textContent = `Section ${id} already exists`; return; }
+
+  const sec = { id, title, questions: [] };
+  if (desc) sec.description = desc;
+  SCHEMA.sections.push(sec);
+  closeModal('sec-modal');
+  renderSchema();
+}
+
+// ── Snippet generator ──────────────────────────────────────────
+function generateServerSnippet() {
+  if (!SCHEMA) { alert('Load the schema first.'); return; }
+  const allQ = SCHEMA.sections.flatMap(s=>s.questions);
+  const ids = allQ.map(q=>q.id).sort();
+
+  const byType = {};
+  for (const q of allQ) {
+    const st = TYPE_MAP[q.type] || 'str';
+    (byType[st] = byType[st] || []).push(q.id);
+  }
+
+  let snippet = `# ── VALID_QUESTION_IDS ──────────────────────────────────────\n`;
+  snippet += `VALID_QUESTION_IDS: frozenset[str] = frozenset([\n`;
+  for (let i = 0; i < ids.length; i += 10) {
+    snippet += '    ' + ids.slice(i,i+10).map(id=>`"${id}"`).join(',') + ',\n';
+  }
+  snippet += `])\n\n`;
+
+  snippet += `# ── QUESTION_TYPES ──────────────────────────────────────────\n`;
+  snippet += `QUESTION_TYPES: dict[str, str] = {\n`;
+  for (const [st, qids] of Object.entries(byType).sort()) {
+    const nums = qids.map(q=>parseInt(q.slice(1))).sort((a,b)=>a-b);
+    snippet += `    **{f"Q{i:03d}": "${st}"  for i in ${JSON.stringify(nums)}},\n`;
+  }
+  snippet += `}\n`;
+
+  $('snippet-code').textContent = snippet;
+  $('snippet-modal').classList.add('open');
+}
+
+function copySnippet() {
+  navigator.clipboard.writeText($('snippet-code').textContent)
+    .then(() => alert('Copied to clipboard.'));
+}
+
+// ── Modals ─────────────────────────────────────────────────────
+function closeModal(id) { $(id).classList.remove('open'); }
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
 });
+
+// ── Init ────────────────────────────────────────────────────────
+TOKEN = getToken();
+if (TOKEN) { $('token-input').value = TOKEN; login(); }
 </script>
 </body>
 </html>
