@@ -407,4 +407,4 @@ sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --since 2025-0
 
 ## License
 
-[MIT](LICENSE) — data will be published under CC BY 4.0 on Zenodo.
+[AGPL-3.0 license](LICENSE) — data will be published under CC BY 4.0 on Zenodo.
