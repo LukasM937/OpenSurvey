@@ -37,13 +37,18 @@ The survey covers:
 - **Bot protection** — [Friendly Captcha v2](https://friendlycaptcha.com) proof-of-work
   on all public write endpoints; GDPR-compliant, no cookies, no tracking
 - **Encrypted newsletter** — subscriber e-mails stored with RSA-4096 + AES-256-GCM;
-  the server process only holds the public key; consent timestamp is server-generated
-- **Admin dashboard** — token-protected, accessible via localhost or Tailscale
-  (`100.64.0.0/10`) only; live aggregates, question browser, export
+  the server process only holds the public key; consent timestamp is server-generated;
+  every subscriber-list access is written to an append-only GDPR audit log
+- **Admin dashboard** — token-protected, localhost/Tailscale only; 5 tabs: Overview,
+  Data Explorer, Geographic (PLZ k-anon), Export, and a live Question schema editor
 - **Public results page** — k-anonymized aggregates at `/results`; regional breakdowns
   only for Bundesländer with ≥ 50 submissions
-- **Scientific export** — k-anonymous JSON dataset (free-text and postal codes
-  excluded, timestamps rounded to month)
+- **Scientific export** — two formats: Bundesland-level and PLZ iterative bundling
+  (5 → 4 → 3 → 2 → 1 digit prefix until ≥ 50 per group); free-text and postal codes
+  excluded, timestamps rounded to month
+- **Prometheus metrics** — `/admin/metrics` exposes counters and gauges for
+  submissions, duplicates, captcha failures, rate-limit hits, HTTP latency, disk
+  usage, and newsletter stats; ships with a ready-to-import Grafana dashboard
 
 ---
 
@@ -56,6 +61,7 @@ The survey covers:
 | Reverse proxy | Apache 2.4 (mod_proxy, mod_ssl, mod_rewrite, mod_headers) |
 | Crypto | `cryptography` — RSA-4096-OAEP + AES-256-GCM |
 | Bot protection | Friendly Captcha v2 (proof-of-work, stdlib `urllib`, no extra dep) |
+| Metrics | `prometheus-client` — Prometheus scrape endpoint + Grafana dashboard |
 | Process | systemd with full sandboxing |
 | TLS | Let's Encrypt via certbot |
 
@@ -67,21 +73,25 @@ The survey covers:
 src/
   survey/
     umfrage.jsx              React frontend (questions, skip logic, i18n, storage adapter)
-    umfrage_struktur.json    Machine-readable question schema
+    umfrage_struktur.json    Machine-readable question schema (157 questions, 17 sections)
   server/
     server.py                FastAPI backend
-    aggregator.py            Data aggregation + k-anonymity export
+    aggregator.py            Data aggregation + k-anonymity export (Bundesland + PLZ)
     newsletter_keygen.py     One-time RSA keypair generation
     newsletter_decrypt.py    Decrypt newsletter subscribers (newsletter user only)
     requirements.txt
   admin/
-    index.html               Admin dashboard (self-contained, Chart.js)
+    index.html               Admin dashboard (5 tabs: Overview, Data Explorer,
+                             Geographic, Export, Questions)
   results/
     index.html               Public results page (self-contained, Chart.js)
 deploy/
   umfrage-server.service     Systemd unit with hardening
   survey.muehrke.de.conf     Apache HTTP → HTTPS redirect
   survey.muehrke.de-le-ssl.conf  Apache HTTPS + reverse proxy
+  prometheus.yml             Prometheus scrape config (targets /admin/metrics)
+  grafana/
+    dashboard.json           Import-ready Grafana dashboard (24 panels, 6 rows)
 ```
 
 ---
@@ -91,7 +101,10 @@ deploy/
 - **Fully anonymous** — no IP addresses, names, or session identifiers are stored
 - **Newsletter addresses** are encrypted on write and stored separately from survey
   responses; no link between a submission and an e-mail address exists; consent
-  timestamps are server-generated (verifiable GDPR audit trail)
+  timestamps are server-generated (verifiable GDPR audit trail); every access to
+  the subscriber list must be recorded via `POST /admin/api/newsletter-access`,
+  which appends an entry (timestamp, IP, subscriber count, optional note) to
+  `/var/data/newsletter/access_log.ndjson`
 - **Publication** will exclude free-text fields (Q052, Q064) and postal codes (Q121);
   regional breakdowns are suppressed below the 50-submission threshold
 - All published texts use the wording:
@@ -115,6 +128,7 @@ deploy/
 8. Build the React frontend with Vite and deploy to `/var/www/survey/`
 9. Copy `src/admin/index.html` and `src/results/index.html` to
    `/opt/survey-server/admin/` and `/opt/survey-server/results/`
+10. *(Optional)* Set up Prometheus + Grafana for metrics monitoring
 
 <details>
 <summary>1 · Users and directories</summary>
@@ -140,7 +154,8 @@ sudo chown -R root:umfrage /opt/survey-server && sudo chmod 750 /opt/survey-serv
 
 ```bash
 sudo python3 -m venv /opt/survey-server/venv
-sudo /opt/survey-server/venv/bin/pip install fastapi "uvicorn[standard]" cryptography
+sudo /opt/survey-server/venv/bin/pip install \
+    fastapi "uvicorn[standard]" cryptography "prometheus-client>=0.20.0"
 
 sudo cp src/server/server.py src/server/aggregator.py /opt/survey-server/
 sudo chmod 440 /opt/survey-server/server.py
@@ -247,6 +262,7 @@ Key environment variables:
 | `SURVEY_DATA_DIR` | `/var/data/survey` | Directory where survey JSON files are stored |
 | `NEWSLETTER_DATA_FILE` | `/var/data/newsletter/subscribers.ndjson` | Encrypted subscriber list |
 | `NEWSLETTER_PUB_KEY` | `/etc/survey/newsletter_pub.pem` | RSA public key for newsletter encryption |
+| `SCHEMA_FILE` | `../survey/umfrage_struktur.json` | Path to the machine-readable question schema; add to `ReadWritePaths` if using the admin schema editor |
 | `SURVEY_ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins |
 | `SURVEY_RATE_LIMIT_REQ` | `5` | Max requests per IP per window |
 | `SURVEY_RATE_LIMIT_WIN` | `60` | Rate limit window in seconds |
@@ -329,8 +345,20 @@ curl -X POST http://localhost:8742/api/survey \
 # → {"status":"ok"}
 
 # Admin endpoints (token required)
-curl http://localhost:8742/admin/api/stats -H "X-Admin-Token: <token>"
+curl http://localhost:8742/admin/api/stats       -H "X-Admin-Token: <token>"
+curl http://localhost:8742/admin/api/plz-stats   -H "X-Admin-Token: <token>"
+curl http://localhost:8742/admin/api/schema      -H "X-Admin-Token: <token>"
 curl http://localhost:8742/results/api/stats
+
+# Prometheus metrics (no token — IP-gated)
+curl http://localhost:8742/admin/metrics
+
+# Record a newsletter subscriber-list access (GDPR audit log)
+curl -X POST http://localhost:8742/admin/api/newsletter-access \
+  -H "X-Admin-Token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"note": "monthly send"}'
+# → {"status":"ok","subscriber_count":42,"accessed_at":"2025-..."}
 
 # Clean up test submission
 sudo chattr -a /var/data/survey
@@ -356,10 +384,61 @@ sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --csv     # CS
 sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --count   # count only
 sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --since 2025-05
 ```
+
+**GDPR audit log** — every time you access the subscriber list, call the audit
+endpoint first. It records the timestamp, caller IP, subscriber count at the time,
+and an optional free-text note to `/var/data/newsletter/access_log.ndjson`.
+
+```bash
+curl -X POST http://localhost:8742/admin/api/newsletter-access \
+  -H "X-Admin-Token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"note": "monthly newsletter send"}'
+```
+
+The audit file is append-only NDJSON and lives next to the encrypted subscriber
+list. Back it up along with `subscribers.ndjson` to maintain the full audit trail.
 </details>
 
 <details>
-<summary>12 · Adding questions</summary>
+<summary>12 · Monitoring (Prometheus + Grafana)</summary>
+
+The server exposes a Prometheus scrape endpoint at `GET /admin/metrics` (IP-gated,
+no token required so Prometheus can pull unauthenticated from localhost).
+
+**Install Prometheus:**
+
+```bash
+sudo apt install prometheus
+sudo cp deploy/prometheus.yml /etc/prometheus/prometheus.yml
+sudo systemctl restart prometheus
+# Verify: curl http://localhost:9090/targets
+```
+
+**Import the Grafana dashboard:**
+
+1. Open Grafana → Dashboards → Import
+2. Upload `deploy/grafana/dashboard.json`
+3. Select your Prometheus datasource when prompted
+
+The dashboard has 24 panels across 6 rows:
+
+| Row | Panels |
+|---|---|
+| At a Glance | Total submissions, range count, newsletter subscribers, disk free, security events, req/s |
+| Submission Trends | Hourly rate vs. prev week, language breakdown, daily totals, cumulative |
+| API Traffic | Req/s by endpoint, p50/p95/p99 latency, HTTP status codes, all-time distribution |
+| Security | Rate limit hits + captcha failures/min, schema mismatches + duplicates/min, totals |
+| Newsletter | Signup rate, language pie, live subscriber count, access audit event counter |
+| Infrastructure | Disk free/used over time, disk gauge, cumulative submissions over time |
+
+> Metrics reset on server restart (they are in-process counters). The gauge
+> `survey_total_submissions` is always accurate — it reads the file count from disk.
+
+</details>
+
+<details>
+<summary>13 · Adding questions</summary>
 
 1. Add question to `SECTIONS` in `umfrage.jsx`
 2. Recalculate schema hash:
@@ -381,6 +460,11 @@ sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --since 2025-0
 | `slider7` | `int1-7` |
 | `scale10` | `int0-10` |
 | `number` | `int` |
+| `party_single` | `str` |
+| `party_multi` | `str` |
+
+5. Update `umfrage_struktur.json` to include the new question (or use the schema
+   editor in the admin dashboard at `/admin` → **Questions** tab)
 
 > **Note:** each question ID may appear in exactly one type group. Duplicate entries
 > across the `**{...}` dict comprehensions silently overwrite each other — the last
@@ -399,7 +483,8 @@ sudo -u newsletter python3 /home/newsletter/newsletter_decrypt.py --since 2025-0
 | Application | Rate limiting (all public endpoints) · schema-hash validation · value validation · JSON depth limit · body field whitelist · `Content-Length` header sanitisation |
 | Admin | IP restriction (localhost + Tailscale `100.64.0.0/10`) + HMAC-safe token comparison · failed auth attempts logged |
 | Filesystem | `chattr +a` (append-only) · `chmod 700` · `O_CREAT\|O_EXCL` atomic file creation |
-| Newsletter | RSA-4096-OAEP + AES-256-GCM · public key only in server process · `fcntl.flock` for multi-process write safety · consent timestamp is server-generated |
+| Newsletter | RSA-4096-OAEP + AES-256-GCM · public key only in server process · `fcntl.flock` for multi-process write safety · consent timestamp is server-generated · every subscriber-list access is audit-logged to `access_log.ndjson` |
+| Metrics | `/admin/metrics` is IP-gated (localhost/Tailscale only); no survey data or PII is exposed — only counters, rates, and disk gauges |
 | Response headers | `X-Content-Type-Options: nosniff` · `X-Frame-Options: DENY` · `Referrer-Policy: no-referrer` |
 | Systemd | `NoNewPrivileges` · `MemoryDenyWriteExecute` · `SystemCallFilter` · `CapabilityBoundingSet=` · `ProtectSystem=strict` · `ReadWritePaths` scoped to data directories |
 

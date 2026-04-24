@@ -8,6 +8,7 @@ Neu in v4:
   [G] Wert-Validierung: Responses dürfen nur bekannte Typen und Werte enthalten.
 """
 
+import fcntl
 import hashlib
 import hmac
 import ipaddress
@@ -28,6 +29,14 @@ from threading import Lock
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
+from starlette.responses import PlainTextResponse
 
 # ── Konfiguration ─────────────────────────────────────────────
 
@@ -59,6 +68,83 @@ _TAILSCALE_NET = ipaddress.ip_network("100.64.0.0/10")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("umfrage")
+
+# ── Prometheus metrics ────────────────────────────────────────
+
+_survey_submissions = Counter(
+    "survey_submissions_total", "Accepted survey submissions", ["month", "lang"]
+)
+_survey_duplicates = Counter(
+    "survey_duplicates_total", "Duplicate submission attempts"
+)
+_survey_schema_mismatches = Counter(
+    "survey_schema_mismatches_total", "Schema hash mismatches from clients"
+)
+_survey_validation_errors = Counter(
+    "survey_validation_errors_total", "Payload validation rejections"
+)
+_captcha_failures = Counter(
+    "captcha_failures_total", "Captcha verification failures"
+)
+_captcha_network_errors = Counter(
+    "captcha_network_errors_total", "Captcha API network/timeout errors"
+)
+_rate_limit_hits = Counter(
+    "rate_limit_hits_total", "Rate limit rejections", ["endpoint"]
+)
+_newsletter_signups = Counter(
+    "newsletter_signups_total", "Newsletter signups", ["lang"]
+)
+_newsletter_access_events = Counter(
+    "newsletter_access_total", "Newsletter subscriber list access audit events"
+)
+_http_requests = Counter(
+    "http_requests_total", "HTTP requests processed", ["method", "endpoint", "status"]
+)
+_http_duration = Histogram(
+    "http_request_duration_seconds", "HTTP request latency", ["endpoint"],
+    buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
+)
+_gauge_submissions = Gauge(
+    "survey_total_submissions", "Total survey files on disk"
+)
+_gauge_disk_free = Gauge(
+    "survey_disk_free_bytes", "Free disk space in bytes"
+)
+_gauge_disk_used = Gauge(
+    "survey_disk_used_bytes", "Used disk space in bytes"
+)
+_gauge_newsletter = Gauge(
+    "newsletter_subscriber_count", "Newsletter subscriber count"
+)
+
+
+def _normalize_endpoint(path: str) -> str:
+    if path in ("/api/survey", "/api/newsletter", "/health"):
+        return path
+    if path in ("/results", "/results/"):
+        return "/results"
+    if path in ("/admin", "/admin/"):
+        return "/admin"
+    if path.startswith("/admin/api/"):
+        return "/admin/api/*"
+    if path.startswith("/results/api/"):
+        return "/results/api/*"
+    return "other"
+
+
+def _update_live_gauges() -> None:
+    _gauge_submissions.set(get_file_count())
+    try:
+        usage = shutil.disk_usage(DATA_DIR)
+        _gauge_disk_free.set(usage.free)
+        _gauge_disk_used.set(usage.used)
+    except Exception:
+        pass
+    count = _newsletter_count()
+    if count >= 0:
+        _gauge_newsletter.set(count)
+
 
 if not CAPTCHA_API_KEY:
     log.warning("FRIENDLYCAPTCHA_API_KEY not set – captcha verification disabled (dev mode)")
@@ -114,11 +200,13 @@ def _verify_captcha(token: str | None, ip: str) -> None:
         # has an outage. Change to fail closed by raising HTTPException here if
         # you prefer strict mode.
         log.error("captcha-network-error  ip=%s  err=%s", ip, exc)
+        _captcha_network_errors.inc()
         return
 
     if not result.get("success"):
         errors = result.get("errors", [])
         log.warning("captcha-fail  ip=%s  errors=%s", ip, errors)
+        _captcha_failures.inc()
         raise HTTPException(400, "Captcha-Lösung ungültig – bitte erneut versuchen")
 
 # ── [F] Kanonisches Schema ─────────────────────────────────────
@@ -260,7 +348,29 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"]     = "interest-cohort=()"
         return response
 
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next) -> StarletteResponse:
+        endpoint = _normalize_endpoint(request.url.path)
+        start = time.perf_counter()
+        try:
+            response = await call_next(request)
+            status = str(response.status_code)
+        except Exception:
+            _http_requests.labels(
+                method=request.method, endpoint=endpoint, status="500"
+            ).inc()
+            _http_duration.labels(endpoint=endpoint).observe(time.perf_counter() - start)
+            raise
+        _http_requests.labels(
+            method=request.method, endpoint=endpoint, status=status
+        ).inc()
+        _http_duration.labels(endpoint=endpoint).observe(time.perf_counter() - start)
+        return response
+
+
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(MetricsMiddleware)
 
 # ── Monatlicher Unterordner ───────────────────────────────────
 #
@@ -355,6 +465,7 @@ async def receive_survey(request: Request) -> JSONResponse:
 
     if is_rate_limited(ip):
         log.warning("rate-limit  ip=%s", ip)
+        _rate_limit_hits.labels(endpoint="/api/survey").inc()
         raise HTTPException(429, "Zu viele Anfragen")
 
     if "application/json" not in request.headers.get("content-type", ""):
@@ -390,6 +501,7 @@ async def receive_survey(request: Request) -> JSONResponse:
     client_hash = str(body.get("schema_hash", ""))
     if client_hash != SCHEMA_HASH:
         log.warning("schema-mismatch  ip=%s  got=%s", ip, client_hash[:16])
+        _survey_schema_mismatches.inc()
         raise HTTPException(400, "Schema-Version stimmt nicht überein – bitte Seite neu laden")
 
     # [F] Wert-Validierung
@@ -400,6 +512,7 @@ async def receive_survey(request: Request) -> JSONResponse:
     val_errors = validate_responses(responses)
     if val_errors:
         log.warning("validation  ip=%s  errors=%s", ip, val_errors[:3])
+        _survey_validation_errors.inc()
         raise HTTPException(422, f"Ungültige Werte: {val_errors[0]}")
 
     safe_id = sanitize_id(str(body.get("id", "")))
@@ -438,6 +551,7 @@ async def receive_survey(request: Request) -> JSONResponse:
     # Duplikat-Check über alle Monatsordner (rglob)
     if list(DATA_DIR.rglob(f"*_{safe_id}.json")):
         log.info("duplicate  id=%s", safe_id)
+        _survey_duplicates.inc()
         return JSONResponse({"status": "duplicate", "message": "Bereits eingereicht"})
 
     # Only store whitelisted, validated fields
@@ -458,6 +572,7 @@ async def receive_survey(request: Request) -> JSONResponse:
         return JSONResponse({"status": "duplicate", "message": "Bereits eingereicht"})
 
     increment_file_count()
+    _survey_submissions.labels(month=stored["_month"], lang=safe_lang).inc()
     log.info("ok  id=%s  month=%s  n=%d", safe_id, stored["_month"], len(responses))
     return JSONResponse({"status": "ok"})
 
@@ -710,6 +825,7 @@ async def newsletter_signup(request: Request) -> JSONResponse:
     ip = get_ip(request)
 
     if is_rate_limited(ip):
+        _rate_limit_hits.labels(endpoint="/api/newsletter").inc()
         raise HTTPException(429, "Zu viele Anfragen")
 
     if "application/json" not in request.headers.get("content-type", ""):
@@ -768,7 +884,6 @@ async def newsletter_signup(request: Request) -> JSONResponse:
     line = json.dumps(entry, ensure_ascii=False)
     # fcntl.flock provides cross-process safety (threading.Lock alone is not enough
     # if uvicorn is ever started with multiple workers)
-    import fcntl
     with _newsletter_lock:
         with open(NEWSLETTER_FILE, "a", encoding="utf-8") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
@@ -777,6 +892,7 @@ async def newsletter_signup(request: Request) -> JSONResponse:
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
 
+    _newsletter_signups.labels(lang=safe_lang).inc()
     log.info("newsletter  ip=%s  lang=%s", ip, safe_lang)
     return JSONResponse({"status": "ok"})
 
@@ -799,3 +915,68 @@ async def results_stats(request: Request) -> JSONResponse:
     if _aggregator is None:
         raise HTTPException(503, "aggregator.py nicht verfügbar")
     return JSONResponse(_aggregator.get_public_stats(DATA_DIR))
+
+
+# ── Prometheus metrics endpoint ───────────────────────────────
+
+@app.get("/admin/metrics")
+async def admin_metrics(request: Request) -> PlainTextResponse:
+    """Prometheus scrape target — IP-gated, no token required."""
+    if not _is_local(get_ip(request)):
+        raise HTTPException(404)
+    _update_live_gauges()
+    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+# ── Newsletter access audit endpoint ─────────────────────────
+
+_AUDIT_FILE = NEWSLETTER_FILE.parent / "access_log.ndjson"
+
+
+@app.post("/admin/api/newsletter-access")
+async def admin_newsletter_access(
+    request: Request,
+    x_admin_token: str = Header(default=""),
+) -> JSONResponse:
+    """Record a newsletter subscriber list access for GDPR audit trail."""
+    ip = get_ip(request)
+    if not _is_local(ip):
+        raise HTTPException(404)
+    _verify_admin(x_admin_token)
+
+    raw = await request.body()
+    note = ""
+    if raw:
+        try:
+            body = json.loads(raw)
+            if isinstance(body, dict) and isinstance(body.get("note"), str):
+                note = body["note"][:200]
+        except Exception:
+            pass
+
+    count = _newsletter_count()
+    now_utc = datetime.now(timezone.utc)
+    entry = {
+        "accessed_at":      now_utc.isoformat(),
+        "ip":               ip,
+        "subscriber_count": count,
+        "note":             note,
+    }
+
+    _AUDIT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(entry, ensure_ascii=False)
+    with _newsletter_lock:
+        with open(_AUDIT_FILE, "a", encoding="utf-8") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                f.write(line + "\n")
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+    _newsletter_access_events.inc()
+    log.info("newsletter-access  ip=%s  count=%d  note=%r", ip, count, note)
+    return JSONResponse({
+        "status":           "ok",
+        "subscriber_count": count,
+        "accessed_at":      entry["accessed_at"],
+    })
