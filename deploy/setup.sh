@@ -493,6 +493,15 @@ step_frontend() {
 
   command -v npm &>/dev/null || die "npm not found — install Node.js first."
 
+  # create-vite@6+ requires Node >=20.19/22.12; pin to v5 on older runtimes.
+  local node_major
+  node_major="$(node --version | sed 's/v\([0-9]*\).*/\1/')"
+  local vite_tag="latest"
+  if (( node_major < 20 )); then
+    vite_tag="5"
+    info "Node.js ${node_major} detected — using create-vite@5 (supports Node 18+)."
+  fi
+
   # One-time: scaffold Vite project
   if [[ ! -d "${BUILD_DIR}/node_modules" ]]; then
     info "Scaffolding Vite React project (first time)…"
@@ -500,8 +509,8 @@ step_frontend() {
     mkdir -p "${INSTALL_DIR}"
 
     pushd "${INSTALL_DIR}" > /dev/null
-    CI=true npm create vite@latest "$(basename "${BUILD_DIR}")" -- --template react --yes 2>&1 \
-      || CI=true npx --yes create-vite@latest "$(basename "${BUILD_DIR}")" --template react
+    CI=true npm create "vite@${vite_tag}" "$(basename "${BUILD_DIR}")" -- --template react 2>&1 \
+      || CI=true npx --yes "create-vite@${vite_tag}" "$(basename "${BUILD_DIR}")" --template react
     popd > /dev/null
 
     pushd "${BUILD_DIR}" > /dev/null
