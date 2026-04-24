@@ -115,16 +115,21 @@ step_users_and_dirs() {
     "${KEY_DIR}" \
     "${WWW_DIR}"
 
-  # chattr +a (append-only) blocks chown/chmod even for root on re-runs.
-  # Strip the flag first, fix ownership, then re-apply it.
+  # Remove chattr +a so we can modify ownership/permissions.
   chattr -a "${DATA_DIR}" 2>/dev/null || true
-  chown "${SERVER_USER}:${SERVER_USER}" "${DATA_DIR}"
-  chmod 700 "${DATA_DIR}"
+  # Skip chown/chmod when already correct — avoids EPERM on filesystems
+  # where chattr is unavailable or the flag cannot be cleared.
+  [[ "$(stat -c '%U' "${DATA_DIR}")" == "${SERVER_USER}" ]] \
+    || chown "${SERVER_USER}:${SERVER_USER}" "${DATA_DIR}"
+  [[ "$(stat -c '%a' "${DATA_DIR}")" == "700" ]] \
+    || chmod 700 "${DATA_DIR}"
   chattr +a "${DATA_DIR}" 2>/dev/null \
     || warn "chattr +a failed on ${DATA_DIR} (needs ext4; skip in LXC/VMs without support)."
 
-  chown "${NEWSLETTER_USER}:${NEWSLETTER_USER}" "${NEWSLETTER_DIR}"
-  chmod 730 "${NEWSLETTER_DIR}"
+  [[ "$(stat -c '%U' "${NEWSLETTER_DIR}")" == "${NEWSLETTER_USER}" ]] \
+    || chown "${NEWSLETTER_USER}:${NEWSLETTER_USER}" "${NEWSLETTER_DIR}"
+  [[ "$(stat -c '%a' "${NEWSLETTER_DIR}")" == "730" ]] \
+    || chmod 730 "${NEWSLETTER_DIR}"
 
   chown -R "root:${SERVER_USER}" "${INSTALL_DIR}"
   chmod 750 "${INSTALL_DIR}"
