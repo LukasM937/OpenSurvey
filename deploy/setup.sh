@@ -74,7 +74,7 @@ step_packages() {
   section "System packages"
   local pkgs=(
     apache2
-    python3 python3-venv python3-dev
+    python3 python3-venv python3-dev python3-cryptography
     nodejs npm
     certbot python3-certbot-apache
     curl
@@ -169,8 +169,19 @@ step_newsletter_keys() {
   chown "${NEWSLETTER_USER}:${NEWSLETTER_USER}" "${keygen}"
   chmod 700 "${keygen}"
 
+  # Grant newsletter user temporary write access to KEY_DIR so the keygen
+  # script can place the public key at /etc/survey/newsletter_pub.pem.
+  chown "root:${NEWSLETTER_USER}" "${KEY_DIR}"
+  chmod 775 "${KEY_DIR}"
+
   info "Generating RSA-4096 keypair as user '${NEWSLETTER_USER}'…"
   sudo -u "${NEWSLETTER_USER}" python3 "${keygen}"
+
+  # Restore KEY_DIR ownership; fix public key permissions explicitly.
+  chown root:root "${KEY_DIR}"
+  chmod 755 "${KEY_DIR}"
+  chown root:root "${KEY_DIR}/newsletter_pub.pem"
+  chmod 644 "${KEY_DIR}/newsletter_pub.pem"
 
   # Deploy decrypt utility
   local decrypt="/home/${NEWSLETTER_USER}/newsletter_decrypt.py"
@@ -529,9 +540,9 @@ cmd_setup() {
 
   step_packages
   step_users_and_dirs
+  step_config          # interactive; persists to ${CONFIG_FILE} early so re-runs work
   step_python
   step_newsletter_keys
-  step_config          # interactive; persists to ${CONFIG_FILE}
   step_service
   step_dashboards
   step_frontend
