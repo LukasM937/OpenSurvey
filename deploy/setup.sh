@@ -80,7 +80,7 @@ step_packages() {
     curl
   )
   info "apt-get update…"
-  apt-get update -qq
+  apt-get update -qq || warn "apt-get update had errors (broken PPA?) — install may still succeed."
   info "Installing: ${pkgs[*]}"
   DEBIAN_FRONTEND=noninteractive apt-get install -y -q "${pkgs[@]}"
   ok "System packages ready."
@@ -91,14 +91,16 @@ step_users_and_dirs() {
   section "Users & directories"
 
   if ! id "${SERVER_USER}" &>/dev/null; then
-    useradd -r -s /sbin/nologin -d "${INSTALL_DIR}" "${SERVER_USER}"
+    getent group "${SERVER_USER}" &>/dev/null || groupadd -r "${SERVER_USER}"
+    useradd -r -s /sbin/nologin -d "${INSTALL_DIR}" -g "${SERVER_USER}" "${SERVER_USER}"
     ok "Created user: ${SERVER_USER}"
   else
     info "User '${SERVER_USER}' already exists."
   fi
 
   if ! id "${NEWSLETTER_USER}" &>/dev/null; then
-    useradd -r -m -s /bin/bash "${NEWSLETTER_USER}"
+    getent group "${NEWSLETTER_USER}" &>/dev/null || groupadd -r "${NEWSLETTER_USER}"
+    useradd -r -m -s /bin/bash -g "${NEWSLETTER_USER}" "${NEWSLETTER_USER}"
     ok "Created user: ${NEWSLETTER_USER}"
   else
     info "User '${NEWSLETTER_USER}' already exists."
@@ -162,27 +164,43 @@ step_python() {
 step_newsletter_keys() {
   section "Newsletter keypair"
 
+  local priv_key="/home/${NEWSLETTER_USER}/private/newsletter_priv.pem"
+
   if [[ -f "${KEY_DIR}/newsletter_pub.pem" ]]; then
-    info "Public key already exists at ${KEY_DIR}/newsletter_pub.pem — skipping generation."
+    info "Newsletter keypair already exists — skipping generation."
     return
   fi
 
-  local keygen="/home/${NEWSLETTER_USER}/newsletter_keygen.py"
-  cp "${REPO_ROOT}/src/server/newsletter_keygen.py" "${keygen}"
-  chown "${NEWSLETTER_USER}:${NEWSLETTER_USER}" "${keygen}"
-  chmod 700 "${keygen}"
+  # A previous partial run may have written the private key but crashed before
+  # writing the public key to /etc/survey/. Re-derive rather than re-generate.
+  if [[ -f "${priv_key}" ]]; then
+    warn "Private key found without public key — re-deriving public key."
+    "${VENV_DIR}/bin/python3" - <<PYEOF
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, Encoding, PublicFormat
+from pathlib import Path; import os
+priv = load_pem_private_key(Path("${priv_key}").read_bytes(), password=None)
+pub  = priv.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+out  = Path("${KEY_DIR}/newsletter_pub.pem")
+out.write_bytes(pub); os.chmod(out, 0o644)
+print("Public key re-derived from existing private key.")
+PYEOF
+    chown root:root "${KEY_DIR}/newsletter_pub.pem"
+    chmod 644 "${KEY_DIR}/newsletter_pub.pem"
+    ok "Newsletter public key recovered."
+    return
+  fi
 
-  # Grant newsletter user temporary write access to KEY_DIR so the keygen
-  # script can place the public key at /etc/survey/newsletter_pub.pem.
-  chown "root:${NEWSLETTER_USER}" "${KEY_DIR}"
-  chmod 775 "${KEY_DIR}"
+  # Fresh generation using the venv Python (guaranteed to have cryptography).
+  # Run as root so it can write directly to /etc/survey/; fix key ownership after.
+  info "Generating RSA-4096 keypair…"
+  mkdir -p "/home/${NEWSLETTER_USER}/private"
+  "${VENV_DIR}/bin/python3" "${REPO_ROOT}/src/server/newsletter_keygen.py"
 
-  info "Generating RSA-4096 keypair as user '${NEWSLETTER_USER}'…"
-  sudo -u "${NEWSLETTER_USER}" python3 "${keygen}"
-
-  # Restore KEY_DIR ownership; fix public key permissions explicitly.
-  chown root:root "${KEY_DIR}"
-  chmod 755 "${KEY_DIR}"
+  # Private key was created as root — hand it to the newsletter user
+  chown -R "${NEWSLETTER_USER}:${NEWSLETTER_USER}" "/home/${NEWSLETTER_USER}/private"
+  chmod 700 "/home/${NEWSLETTER_USER}/private"
+  chmod 600 "${priv_key}"
+  # Public key: root-owned, world-readable
   chown root:root "${KEY_DIR}/newsletter_pub.pem"
   chmod 644 "${KEY_DIR}/newsletter_pub.pem"
 
@@ -193,7 +211,7 @@ step_newsletter_keys() {
   chmod 700 "${decrypt}"
 
   ok "Newsletter keypair generated."
-  info "  Private key : /home/${NEWSLETTER_USER}/private/newsletter_priv.pem  (${NEWSLETTER_USER} only)"
+  info "  Private key : ${priv_key}  (${NEWSLETTER_USER} only)"
   info "  Public key  : ${KEY_DIR}/newsletter_pub.pem"
 }
 
@@ -210,8 +228,8 @@ step_config() {
 
   # Domain
   if [[ -z "${SURVEY_DOMAIN:-}" ]]; then
-    read -r -p "  Domain name (e.g. survey.example.com): " SURVEY_DOMAIN
-    [[ -n "${SURVEY_DOMAIN}" ]] || die "Domain name is required."
+    read -r -p "  Domain name (e.g. survey.example.com): " SURVEY_DOMAIN || true
+    [[ -n "${SURVEY_DOMAIN:-}" ]] || die "Domain name is required."
   else
     info "Domain: ${SURVEY_DOMAIN}"
   fi
@@ -225,22 +243,24 @@ step_config() {
     info "Admin token already set."
   fi
 
-  # FriendlyCaptcha
-  if [[ -z "${FRIENDLYCAPTCHA_SITEKEY:-}" ]]; then
+  # FriendlyCaptcha — use ${VAR+set} to distinguish "never configured" (unset)
+  # from "configured as empty" (dev mode). Sourcing the config sets the variable
+  # to "", which is still "set", so we skip the prompt on re-runs.
+  if [[ -z "${FRIENDLYCAPTCHA_SITEKEY+set}" ]]; then
     echo ""
     warn "Friendly Captcha keys are required in production."
     warn "Leave empty to run in dev mode (captcha disabled, server logs a warning)."
-    read -r -p "  FriendlyCaptcha Sitekey  (public,  from friendlycaptcha.com): " FRIENDLYCAPTCHA_SITEKEY
-    read -r -p "  FriendlyCaptcha API Key  (secret,  from friendlycaptcha.com): " FRIENDLYCAPTCHA_API_KEY
+    read -r -p "  FriendlyCaptcha Sitekey  (public,  from friendlycaptcha.com): " FRIENDLYCAPTCHA_SITEKEY || true
+    read -r -p "  FriendlyCaptcha API Key  (secret,  from friendlycaptcha.com): " FRIENDLYCAPTCHA_API_KEY || true
     FRIENDLYCAPTCHA_SITEKEY="${FRIENDLYCAPTCHA_SITEKEY:-}"
     FRIENDLYCAPTCHA_API_KEY="${FRIENDLYCAPTCHA_API_KEY:-}"
   else
-    info "FriendlyCaptcha already configured."
+    info "FriendlyCaptcha: ${FRIENDLYCAPTCHA_SITEKEY:+configured}${FRIENDLYCAPTCHA_SITEKEY:-dev mode (no captcha)}."
   fi
 
   # Admin e-mail (used for certbot)
   if [[ -z "${ADMIN_EMAIL:-}" ]]; then
-    read -r -p "  Admin e-mail (for Let's Encrypt notifications): " ADMIN_EMAIL
+    read -r -p "  Admin e-mail (for Let's Encrypt notifications): " ADMIN_EMAIL || true
     ADMIN_EMAIL="${ADMIN_EMAIL:-admin@${SURVEY_DOMAIN}}"
   else
     info "Admin e-mail: ${ADMIN_EMAIL}"
