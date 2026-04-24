@@ -117,22 +117,34 @@ step_users_and_dirs() {
 
   # Remove chattr +a so we can modify ownership/permissions.
   chattr -a "${DATA_DIR}" 2>/dev/null || true
-  # Skip chown/chmod when already correct — avoids EPERM on filesystems
-  # where chattr is unavailable or the flag cannot be cleared.
-  [[ "$(stat -c '%U' "${DATA_DIR}")" == "${SERVER_USER}" ]] \
-    || chown "${SERVER_USER}:${SERVER_USER}" "${DATA_DIR}"
-  [[ "$(stat -c '%a' "${DATA_DIR}")" == "700" ]] \
-    || chmod 700 "${DATA_DIR}"
+
+  # Ownership/permission changes are best-effort. On some filesystems (external
+  # drives, certain SD card mounts, btrfs) chown/chmod may fail even as root.
+  # We warn and continue — the service will fail to start if the dir is not
+  # owned by ${SERVER_USER}, which is a clearer error than aborting here.
+  if [[ "$(stat -c '%U' "${DATA_DIR}" 2>/dev/null)" != "${SERVER_USER}" ]]; then
+    chown "${SERVER_USER}:${SERVER_USER}" "${DATA_DIR}" \
+      || warn "${DATA_DIR} ownership could not be set — if the service fails to start, run manually: sudo chown ${SERVER_USER}:${SERVER_USER} ${DATA_DIR}"
+  fi
+  if [[ "$(stat -c '%a' "${DATA_DIR}" 2>/dev/null)" != "700" ]]; then
+    chmod 700 "${DATA_DIR}" \
+      || warn "chmod 700 ${DATA_DIR} failed — directory may be too permissive."
+  fi
+
   chattr +a "${DATA_DIR}" 2>/dev/null \
-    || warn "chattr +a failed on ${DATA_DIR} (needs ext4; skip in LXC/VMs without support)."
+    || warn "chattr +a failed on ${DATA_DIR} (needs ext4; skip in LXC/VMs/external drives)."
 
-  [[ "$(stat -c '%U' "${NEWSLETTER_DIR}")" == "${NEWSLETTER_USER}" ]] \
-    || chown "${NEWSLETTER_USER}:${NEWSLETTER_USER}" "${NEWSLETTER_DIR}"
-  [[ "$(stat -c '%a' "${NEWSLETTER_DIR}")" == "730" ]] \
-    || chmod 730 "${NEWSLETTER_DIR}"
+  if [[ "$(stat -c '%U' "${NEWSLETTER_DIR}" 2>/dev/null)" != "${NEWSLETTER_USER}" ]]; then
+    chown "${NEWSLETTER_USER}:${NEWSLETTER_USER}" "${NEWSLETTER_DIR}" \
+      || warn "Could not chown ${NEWSLETTER_DIR} to ${NEWSLETTER_USER}."
+  fi
+  if [[ "$(stat -c '%a' "${NEWSLETTER_DIR}" 2>/dev/null)" != "730" ]]; then
+    chmod 730 "${NEWSLETTER_DIR}" \
+      || warn "chmod 730 ${NEWSLETTER_DIR} failed."
+  fi
 
-  chown -R "root:${SERVER_USER}" "${INSTALL_DIR}"
-  chmod 750 "${INSTALL_DIR}"
+  chown -R "root:${SERVER_USER}" "${INSTALL_DIR}" || true
+  chmod 750 "${INSTALL_DIR}" || true
 
   ok "Users and directories configured."
 }
