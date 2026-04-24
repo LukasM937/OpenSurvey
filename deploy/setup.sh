@@ -578,9 +578,12 @@ cmd_setup() {
   info "Repo root : ${REPO_ROOT}"
   info "Install   : ${INSTALL_DIR}"
 
+  # Config is written FIRST — /etc/survey is always writable as root,
+  # so setup.conf exists before any subsequent step can fail.
+  mkdir -p "${KEY_DIR}"
+  step_config
   step_packages
   step_users_and_dirs
-  step_config          # interactive; persists to ${CONFIG_FILE} early so re-runs work
   step_python
   step_newsletter_keys
   step_service
