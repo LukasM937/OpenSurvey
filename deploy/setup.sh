@@ -113,6 +113,9 @@ step_users_and_dirs() {
     "${KEY_DIR}" \
     "${WWW_DIR}"
 
+  # chattr +a (append-only) blocks chown/chmod even for root on re-runs.
+  # Strip the flag first, fix ownership, then re-apply it.
+  chattr -a "${DATA_DIR}" 2>/dev/null || true
   chown "${SERVER_USER}:${SERVER_USER}" "${DATA_DIR}"
   chmod 700 "${DATA_DIR}"
   chattr +a "${DATA_DIR}" 2>/dev/null \
