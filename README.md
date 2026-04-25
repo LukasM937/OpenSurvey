@@ -86,6 +86,7 @@ src/
   results/
     index.html               Public results page (self-contained, Chart.js)
 deploy/
+  setup.sh                   Setup & update script (initial install, update, restart)
   umfrage-server.service     Systemd unit with hardening
   survey.muehrke.de.conf     Apache HTTP → HTTPS redirect
   survey.muehrke.de-le-ssl.conf  Apache HTTPS + reverse proxy
@@ -114,9 +115,44 @@ deploy/
 
 ## Self-hosting
 
-> Full step-by-step instructions are in the sections below.
+### Quick start (automated)
 
-**Quick overview:**
+`deploy/setup.sh` automates the full setup on a fresh **Debian/Ubuntu** server.
+
+```bash
+# Clone the repository
+git clone https://github.com/LukasM937/OpenSurvey.git
+cd OpenSurvey
+
+# Initial setup — installs all packages, creates users, builds the frontend,
+# configures Apache + TLS, and starts the service. Prompts for domain,
+# FriendlyCaptcha keys, and admin e-mail; generates the admin token automatically.
+sudo bash deploy/setup.sh setup
+```
+
+After setup the script prints your **admin token** and the live URL.
+The token is also saved in `/etc/survey/setup.conf` (`chmod 600`).
+
+**Day-to-day operations:**
+
+```bash
+# Pull latest code, rebuild frontend, restart service
+sudo bash deploy/setup.sh update
+
+# Restart the service only
+sudo bash deploy/setup.sh restart
+
+# Show systemctl status + HTTP health check
+sudo bash deploy/setup.sh status
+```
+
+**Requirements:** Debian/Ubuntu · Python 3.11+ · Node.js/npm · root access · a public domain with DNS pointing to the server.
+
+---
+
+> Full step-by-step manual instructions are in the sections below.
+
+**Manual overview:**
 
 1. Create system users (`umfrage`, `newsletter`) and data directories
 2. Deploy the Python venv and copy `server.py` + `aggregator.py`
@@ -492,4 +528,4 @@ The dashboard has 24 panels across 6 rows:
 
 ## License
 
-[MIT](LICENSE) — data will be published under CC BY 4.0 on Zenodo.
+[AGPL-3.0 license](LICENSE) — data will be published under CC BY 4.0 on Zenodo.
