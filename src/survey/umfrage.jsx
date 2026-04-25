@@ -1224,19 +1224,22 @@ export default function App() {
     if (document.querySelector('script[data-frc]')) return;
     const s = document.createElement("script");
     s.type = "module";
-    s.src = "https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/dist/site.min.js";
+    s.src = "https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/site.min.js";
     s.crossOrigin = "anonymous";
     s.dataset.frc = "1";
     document.head.appendChild(s);
   }, []);
 
-  // Re-attach captcha listener whenever modal opens
+  // Re-attach captcha whenever modal opens; attach() is needed because site.min.js
+  // calls attach() once on DOMContentLoaded with no MutationObserver, so elements
+  // added later (inside the modal) are never auto-discovered.
   useEffect(() => {
     if (!modal || !captchaRef.current) return;
     setCaptchaToken(null);
     const el = captchaRef.current;
     const onDone = (e) => setCaptchaToken(e.detail?.response ?? null);
     el.addEventListener("frc:widget.complete", onDone);
+    window.frcaptcha?.attach();
     return () => el.removeEventListener("frc:widget.complete", onDone);
   }, [modal]);
 
@@ -1453,9 +1456,7 @@ export default function App() {
                   {t.dupWarning}
                 </div>
               )}
-              <div style={{ marginBottom: "12px" }}>
-                <frc-captcha ref={captchaRef} sitekey="FCMS9RCA6232KR7L"></frc-captcha>
-              </div>
+              <div ref={captchaRef} className="frc-captcha" data-sitekey="FCMS9RCA6232KR7L" style={{ marginBottom: "12px" }}></div>
 
               {/* ── Ausfülldauer ── */}
               {durationSec > 10 && (
