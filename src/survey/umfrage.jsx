@@ -1238,7 +1238,6 @@ export default function App() {
     // FriendlyCaptcha SDK v2 uses dot-prefixed placeholders (.UNVERIFIED etc.)
     // during solving; only accept a response once it is a real signed token.
     const accept = (response) => {
-      console.log("[survey] captcha response candidate:", response ? `${response.substring(0, 40)}… (len=${response.length})` : response);
       if (response && !response.startsWith(".")) setCaptchaToken(response);
     };
     // Poll every 300 ms so we catch completion even if the event doesn't fire.
@@ -1322,7 +1321,6 @@ export default function App() {
   const doSubmit = async () => {
     // Only use the token set by the polling/event handler (guaranteed to be a real signed token).
     const token = captchaToken;
-    console.log("[survey] captcha token at submit:", token ? `${token.substring(0, 40)}… (len=${token.length})` : token);
     if (!token) {
       setSendError("Bitte löse zuerst das Captcha.");
       return;
