@@ -1221,21 +1221,37 @@ export default function App() {
   const [newsletterConsent, setNewsletterConsent] = useState(false);
   const [captchaToken, setCaptchaToken] = useState(null);
   const captchaRef = useRef(null);
+  const captchaWidgetRef = useRef(null);
 
   // Create widget when modal opens; destroy on close.
   // SDK is bundled (no CDN), so _frcSdk is always available synchronously.
   useEffect(() => {
     if (!modal || !captchaRef.current) return;
     setCaptchaToken(null);
+    const el = captchaRef.current;
     const widget = _frcSdk.createWidget({
-      element: captchaRef.current,
+      element: el,
       sitekey: "FCMS9RCA6232KR7L",
       startMode: "auto",
     });
-    widget.addEventListener("frc:widget.complete", (e) =>
-      setCaptchaToken(e.detail?.response ?? null)
-    );
-    return () => widget.destroy();
+    captchaWidgetRef.current = widget;
+    // FriendlyCaptcha SDK v2 uses dot-prefixed placeholders (.UNVERIFIED etc.)
+    // during solving; only accept a response once it is a real signed token.
+    const accept = (response) => {
+      if (response && !response.startsWith(".")) setCaptchaToken(response);
+    };
+    // Poll every 300 ms so we catch completion even if the event doesn't fire.
+    const timer = setInterval(() => accept(widget.getResponse?.()), 300);
+    // Also listen for events on both the widget object and the DOM element.
+    const onComplete = (e) => accept(e.detail?.response ?? widget.getResponse?.());
+    widget.addEventListener("frc:widget.complete", onComplete);
+    el.addEventListener("frc:widget.complete", onComplete);
+    return () => {
+      clearInterval(timer);
+      captchaWidgetRef.current = null;
+      el.removeEventListener("frc:widget.complete", onComplete);
+      widget.destroy();
+    };
   }, [modal]);
 
   // ── Load saved state (non-blocking, fires in background) ──
@@ -1303,6 +1319,12 @@ export default function App() {
 
   // ── Server submit ──
   const doSubmit = async () => {
+    // Only use the token set by the polling/event handler (guaranteed to be a real signed token).
+    const token = captchaToken;
+    if (!token) {
+      setSendError("Bitte löse zuerst das Captcha.");
+      return;
+    }
     setSending(true);
     setSendError(null);
     const durationSec = (startedAtRef.current !== null && shareDuration)
@@ -1323,7 +1345,7 @@ export default function App() {
           total:        TOTAL,
           duration_seconds: durationSec,
           responses:    normalized,
-          "frc-captcha-response": captchaToken,
+          "frc-captcha-response": token,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1507,11 +1529,11 @@ export default function App() {
                   style={{ flex: 1, padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", background: "#fff", cursor: "pointer", fontSize: "13px", color: "#374151" }}>
                   {t.cancel}
                 </button>
-                <button onClick={doSubmit} disabled={sending || (newsletterEmail.length > 0 && !emailValid)}
+                <button onClick={doSubmit} disabled={sending || !captchaToken || (newsletterEmail.length > 0 && !emailValid)}
                   style={{ flex: 2, padding: "10px", border: "none", borderRadius: "8px",
-                    background: sending ? "#94a3b8" : (newsletterEmail.length > 0 && !emailValid) ? "#e2e8f0" : "#3b82f6",
-                    color: (newsletterEmail.length > 0 && !emailValid) ? "#94a3b8" : "#fff",
-                    cursor: sending || (newsletterEmail.length > 0 && !emailValid) ? "not-allowed" : "pointer",
+                    background: sending ? "#94a3b8" : (!captchaToken || (newsletterEmail.length > 0 && !emailValid)) ? "#e2e8f0" : "#3b82f6",
+                    color: (!captchaToken || (newsletterEmail.length > 0 && !emailValid)) ? "#94a3b8" : "#fff",
+                    cursor: sending || !captchaToken || (newsletterEmail.length > 0 && !emailValid) ? "not-allowed" : "pointer",
                     fontSize: "13px", fontWeight: "600" }}>
                   {sending ? t.sending : t.submit}
                 </button>
