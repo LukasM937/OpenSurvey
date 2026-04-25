@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { FriendlyCaptchaSDK } from "@friendlycaptcha/sdk";
+
+const _frcSdk = new FriendlyCaptchaSDK();
 
 const KA = "__ka__";
 
@@ -1218,22 +1221,13 @@ export default function App() {
   const [newsletterConsent, setNewsletterConsent] = useState(false);
   const [captchaToken, setCaptchaToken] = useState(null);
   const captchaRef = useRef(null);
-  const sdkRef = useRef(null);
 
-  // Load FriendlyCaptcha SDK module once via the official sdk.js export.
-  // Using dynamic import + createWidget() avoids the undocumented site.min.js
-  // auto-discovery path and all its class-selector / timing pitfalls.
+  // Create widget when modal opens; destroy on close.
+  // SDK is bundled (no CDN), so _frcSdk is always available synchronously.
   useEffect(() => {
-    import("https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/sdk.js")
-      .then(({ FriendlyCaptchaSDK }) => { sdkRef.current = new FriendlyCaptchaSDK(); })
-      .catch(() => {});
-  }, []);
-
-  // Create widget programmatically when modal opens; destroy on close.
-  useEffect(() => {
-    if (!modal || !captchaRef.current || !sdkRef.current) return;
+    if (!modal || !captchaRef.current) return;
     setCaptchaToken(null);
-    const widget = sdkRef.current.createWidget({
+    const widget = _frcSdk.createWidget({
       element: captchaRef.current,
       sitekey: "FCMS9RCA6232KR7L",
       startMode: "auto",
