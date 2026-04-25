@@ -520,7 +520,10 @@ async def receive_survey(request: Request) -> JSONResponse:
         raise HTTPException(400, "Fehlende oder ungültige id")
 
     # Whitelist top-level fields — reject payloads with unknown keys
-    known_fields = {"id", "schema_hash", "responses", "lang", "frc-captcha-response"}
+    known_fields = {
+        "id", "schema_hash", "responses", "lang", "frc-captcha-response",
+        "submitted_at", "version", "answered", "total", "duration_seconds",
+    }
     unknown_fields = set(body.keys()) - known_fields
     if unknown_fields:
         raise HTTPException(400, f"Unbekannte Felder: {sorted(unknown_fields)[:5]}")
@@ -555,12 +558,15 @@ async def receive_survey(request: Request) -> JSONResponse:
         return JSONResponse({"status": "duplicate", "message": "Bereits eingereicht"})
 
     # Only store whitelisted, validated fields
+    duration_raw = body.get("duration_seconds")
     stored = {
         "id":           safe_id,
         "lang":         safe_lang,
         "responses":    responses,
         "_received_at": ts_iso,
         "_month":       now_utc.strftime("%Y-%m"),
+        **({"duration_seconds": duration_raw}
+           if isinstance(duration_raw, int) and 0 <= duration_raw <= 86400 else {}),
     }
 
     try:
