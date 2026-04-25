@@ -143,14 +143,17 @@ step_python() {
   "${VENV_DIR}/bin/pip" install -q -r "${REPO_ROOT}/src/server/requirements.txt"
 
   info "Deploying server files…"
-  cp "${REPO_ROOT}/src/server/server.py"    "${INSTALL_DIR}/server.py"
-  cp "${REPO_ROOT}/src/server/aggregator.py" "${INSTALL_DIR}/aggregator.py"
+  cp "${REPO_ROOT}/src/server/server.py"            "${INSTALL_DIR}/server.py"
+  cp "${REPO_ROOT}/src/server/aggregator.py"         "${INSTALL_DIR}/aggregator.py"
+  cp "${REPO_ROOT}/src/survey/umfrage_struktur.json" "${INSTALL_DIR}/umfrage_struktur.json"
   chown "root:${SERVER_USER}" \
     "${INSTALL_DIR}/server.py" \
-    "${INSTALL_DIR}/aggregator.py"
+    "${INSTALL_DIR}/aggregator.py" \
+    "${INSTALL_DIR}/umfrage_struktur.json"
   chmod 440 \
     "${INSTALL_DIR}/server.py" \
-    "${INSTALL_DIR}/aggregator.py"
+    "${INSTALL_DIR}/aggregator.py" \
+    "${INSTALL_DIR}/umfrage_struktur.json"
 
   ok "Python environment ready."
 }
@@ -469,6 +472,15 @@ step_frontend() {
   sed "s|const SERVER_URL = \"https://survey\.muehrke\.de/api/survey\";|const SERVER_URL = \"https://${SURVEY_DOMAIN}/api/survey\";|" \
     "${REPO_ROOT}/src/survey/umfrage.jsx" \
     > "${BUILD_DIR}/src/App.jsx"
+
+  # Replace Vite's default index.css (dark background, body flex centering, #root
+  # padding) with a minimal reset so the survey renders full-screen without black
+  # edges or offset content.
+  cat > "${BUILD_DIR}/src/index.css" <<'CSSEOF'
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; background: #f8fafc; }
+#root { height: 100%; }
+CSSEOF
 
   # Also copy the question schema (may be imported by the JSX in the future)
   cp "${REPO_ROOT}/src/survey/umfrage_struktur.json" \

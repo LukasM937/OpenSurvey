@@ -10,6 +10,7 @@ WorkingDirectory=/opt/survey-server
 
 Environment=SURVEY_DATA_DIR=/var/data/survey
 Environment=SURVEY_ALLOWED_ORIGINS=*
+Environment=SCHEMA_FILE=/opt/survey-server/umfrage_struktur.json
 
 # [A] --proxy-headers + --forwarded-allow-ips ist ZWINGEND erforderlich.
 #     Ohne diese Flags ist X-Forwarded-For fälschbar und Rate Limiting

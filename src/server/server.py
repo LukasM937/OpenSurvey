@@ -50,8 +50,12 @@ RATE_LIMIT_WIN  = int(os.getenv("SURVEY_RATE_LIMIT_WIN",  "60"))
 ALLOWED_ORIGINS  = os.getenv("SURVEY_ALLOWED_ORIGINS",     "*").split(",")
 ADMIN_TOKEN      = os.getenv("ADMIN_TOKEN",                "")
 STATIC_DIR       = Path(os.getenv("STATIC_DIR", str(Path(__file__).parent))).resolve()
+# Prefer schema alongside server.py (production layout); fall back to source-tree
+# layout (src/server/ → src/survey/) for local development.
+_schema_same_dir = Path(__file__).parent / "umfrage_struktur.json"
+_schema_src_tree = Path(__file__).parent.parent / "survey" / "umfrage_struktur.json"
 SCHEMA_FILE      = Path(os.getenv("SCHEMA_FILE",
-                   str(Path(__file__).parent.parent / "survey" / "umfrage_struktur.json")))
+                   str(_schema_same_dir if _schema_same_dir.exists() else _schema_src_tree)))
 NEWSLETTER_FILE     = Path(os.getenv("NEWSLETTER_DATA_FILE",
                       "/var/data/newsletter/subscribers.ndjson"))
 NEWSLETTER_PUB_KEY  = Path(os.getenv("NEWSLETTER_PUB_KEY",
