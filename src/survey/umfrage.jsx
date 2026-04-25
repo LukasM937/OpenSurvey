@@ -1218,29 +1218,30 @@ export default function App() {
   const [newsletterConsent, setNewsletterConsent] = useState(false);
   const [captchaToken, setCaptchaToken] = useState(null);
   const captchaRef = useRef(null);
+  const sdkRef = useRef(null);
 
-  // Load FriendlyCaptcha SDK once
+  // Load FriendlyCaptcha SDK module once via the official sdk.js export.
+  // Using dynamic import + createWidget() avoids the undocumented site.min.js
+  // auto-discovery path and all its class-selector / timing pitfalls.
   useEffect(() => {
-    if (document.querySelector('script[data-frc]')) return;
-    const s = document.createElement("script");
-    s.type = "module";
-    s.src = "https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/site.min.js";
-    s.crossOrigin = "anonymous";
-    s.dataset.frc = "1";
-    document.head.appendChild(s);
+    import("https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/sdk.js")
+      .then(({ FriendlyCaptchaSDK }) => { sdkRef.current = new FriendlyCaptchaSDK(); })
+      .catch(() => {});
   }, []);
 
-  // Re-attach captcha whenever modal opens; attach() is needed because site.min.js
-  // calls attach() once on DOMContentLoaded with no MutationObserver, so elements
-  // added later (inside the modal) are never auto-discovered.
+  // Create widget programmatically when modal opens; destroy on close.
   useEffect(() => {
-    if (!modal || !captchaRef.current) return;
+    if (!modal || !captchaRef.current || !sdkRef.current) return;
     setCaptchaToken(null);
-    const el = captchaRef.current;
-    const onDone = (e) => setCaptchaToken(e.detail?.response ?? null);
-    el.addEventListener("frc:widget.complete", onDone);
-    window.frcaptcha?.attach();
-    return () => el.removeEventListener("frc:widget.complete", onDone);
+    const widget = sdkRef.current.createWidget({
+      element: captchaRef.current,
+      sitekey: "FCMS9RCA6232KR7L",
+      startMode: "auto",
+    });
+    widget.addEventListener("frc:widget.complete", (e) =>
+      setCaptchaToken(e.detail?.response ?? null)
+    );
+    return () => widget.destroy();
   }, [modal]);
 
   // ── Load saved state (non-blocking, fires in background) ──
@@ -1456,7 +1457,7 @@ export default function App() {
                   {t.dupWarning}
                 </div>
               )}
-              <div ref={captchaRef} className="frc-captcha" data-sitekey="FCMS9RCA6232KR7L" style={{ marginBottom: "12px" }}></div>
+              <div ref={captchaRef} style={{ marginBottom: "12px" }}></div>
 
               {/* ── Ausfülldauer ── */}
               {durationSec > 10 && (
