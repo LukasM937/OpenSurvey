@@ -1224,7 +1224,7 @@ export default function App() {
     if (document.querySelector('script[data-frc]')) return;
     const s = document.createElement("script");
     s.type = "module";
-    s.src = "https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/site.min.js";
+    s.src = "https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/dist/site.min.js";
     s.crossOrigin = "anonymous";
     s.dataset.frc = "1";
     document.head.appendChild(s);
@@ -1236,8 +1236,8 @@ export default function App() {
     setCaptchaToken(null);
     const el = captchaRef.current;
     const onDone = (e) => setCaptchaToken(e.detail?.response ?? null);
-    el.addEventListener("frc:captchaCompleted", onDone);
-    return () => el.removeEventListener("frc:captchaCompleted", onDone);
+    el.addEventListener("frc:widget.complete", onDone);
+    return () => el.removeEventListener("frc:widget.complete", onDone);
   }, [modal]);
 
   // ── Load saved state (non-blocking, fires in background) ──
@@ -1453,8 +1453,8 @@ export default function App() {
                   {t.dupWarning}
                 </div>
               )}
-              <div ref={captchaRef} style={{ marginBottom: "12px" }}>
-                <frc-captcha sitekey="FCMS9RCA6232KR7L"></frc-captcha>
+              <div style={{ marginBottom: "12px" }}>
+                <frc-captcha ref={captchaRef} sitekey="FCMS9RCA6232KR7L"></frc-captcha>
               </div>
 
               {/* ── Ausfülldauer ── */}
