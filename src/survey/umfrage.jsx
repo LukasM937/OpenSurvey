@@ -1429,12 +1429,11 @@ export default function App() {
                   {t.dupWarning}
                 </div>
               )}
-              <!-- Load the Friendly Captcha v2 SDK (no npm required) -->
               <script type="module"
                 src="https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/site.min.js"
                 crossorigin="anonymous" defer></script>
               <div class="frc-captcha" data-sitekey="FCMS9RCA6232KR7L"></div>
-              
+
               {/* ── Ausfülldauer ── */}
               {durationSec > 10 && (
                 <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px" }}>
