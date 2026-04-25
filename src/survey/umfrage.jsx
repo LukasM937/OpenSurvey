@@ -1221,6 +1221,7 @@ export default function App() {
   const [newsletterConsent, setNewsletterConsent] = useState(false);
   const [captchaToken, setCaptchaToken] = useState(null);
   const captchaRef = useRef(null);
+  const captchaWidgetRef = useRef(null);
 
   // Create widget when modal opens; destroy on close.
   // SDK is bundled (no CDN), so _frcSdk is always available synchronously.
@@ -1232,10 +1233,11 @@ export default function App() {
       sitekey: "FCMS9RCA6232KR7L",
       startMode: "auto",
     });
+    captchaWidgetRef.current = widget;
     widget.addEventListener("frc:widget.complete", (e) =>
       setCaptchaToken(e.detail?.response ?? null)
     );
-    return () => widget.destroy();
+    return () => { captchaWidgetRef.current = null; widget.destroy(); };
   }, [modal]);
 
   // ── Load saved state (non-blocking, fires in background) ──
@@ -1303,6 +1305,12 @@ export default function App() {
 
   // ── Server submit ──
   const doSubmit = async () => {
+    // Prefer the state value set by the event; fall back to reading directly from the widget.
+    const token = captchaToken ?? captchaWidgetRef.current?.getResponse() ?? null;
+    if (!token) {
+      setSendError("Bitte löse zuerst das Captcha.");
+      return;
+    }
     setSending(true);
     setSendError(null);
     const durationSec = (startedAtRef.current !== null && shareDuration)
@@ -1323,7 +1331,7 @@ export default function App() {
           total:        TOTAL,
           duration_seconds: durationSec,
           responses:    normalized,
-          "frc-captcha-response": captchaToken,
+          "frc-captcha-response": token,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
