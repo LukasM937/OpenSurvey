@@ -1228,16 +1228,26 @@ export default function App() {
   useEffect(() => {
     if (!modal || !captchaRef.current) return;
     setCaptchaToken(null);
+    const el = captchaRef.current;
     const widget = _frcSdk.createWidget({
-      element: captchaRef.current,
+      element: el,
       sitekey: "FCMS9RCA6232KR7L",
       startMode: "auto",
     });
     captchaWidgetRef.current = widget;
-    widget.addEventListener("frc:widget.complete", (e) =>
-      setCaptchaToken(e.detail?.response ?? null)
-    );
-    return () => { captchaWidgetRef.current = null; widget.destroy(); };
+    // Listen on both the widget object and the DOM element — the SDK
+    // dispatches frc:widget.complete on the container element in v2.
+    const onComplete = (e) => {
+      const response = e.detail?.response ?? widget.getResponse?.() ?? null;
+      if (response) setCaptchaToken(response);
+    };
+    widget.addEventListener("frc:widget.complete", onComplete);
+    el.addEventListener("frc:widget.complete", onComplete);
+    return () => {
+      captchaWidgetRef.current = null;
+      el.removeEventListener("frc:widget.complete", onComplete);
+      widget.destroy();
+    };
   }, [modal]);
 
   // ── Load saved state (non-blocking, fires in background) ──
