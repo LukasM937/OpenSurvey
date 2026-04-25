@@ -1453,7 +1453,9 @@ export default function App() {
                   {t.dupWarning}
                 </div>
               )}
-              <div ref={captchaRef} className="frc-captcha" data-sitekey="FCMS9RCA6232KR7L" style={{ marginBottom: "12px" }}></div>
+              <div ref={captchaRef} style={{ marginBottom: "12px" }}>
+                <frc-captcha sitekey="FCMS9RCA6232KR7L"></frc-captcha>
+              </div>
 
               {/* ── Ausfülldauer ── */}
               {durationSec > 10 && (
