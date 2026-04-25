@@ -458,6 +458,11 @@ step_frontend() {
     popd > /dev/null
   fi
 
+  # Always ensure FriendlyCaptcha SDK is present (safe to re-run on update)
+  pushd "${BUILD_DIR}" > /dev/null
+  npm install --silent @friendlycaptcha/sdk
+  popd > /dev/null
+
   info "Copying source files to build directory…"
 
   # Patch SERVER_URL to match the configured domain

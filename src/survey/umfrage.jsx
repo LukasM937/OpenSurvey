@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { FriendlyCaptchaSDK } from "@friendlycaptcha/sdk";
+
+const _frcSdk = new FriendlyCaptchaSDK();
 
 const KA = "__ka__";
 
@@ -1219,25 +1222,20 @@ export default function App() {
   const [captchaToken, setCaptchaToken] = useState(null);
   const captchaRef = useRef(null);
 
-  // Load FriendlyCaptcha SDK once
-  useEffect(() => {
-    if (document.querySelector('script[data-frc]')) return;
-    const s = document.createElement("script");
-    s.type = "module";
-    s.src = "https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/dist/site.min.js";
-    s.crossOrigin = "anonymous";
-    s.dataset.frc = "1";
-    document.head.appendChild(s);
-  }, []);
-
-  // Re-attach captcha listener whenever modal opens
+  // Create widget when modal opens; destroy on close.
+  // SDK is bundled (no CDN), so _frcSdk is always available synchronously.
   useEffect(() => {
     if (!modal || !captchaRef.current) return;
     setCaptchaToken(null);
-    const el = captchaRef.current;
-    const onDone = (e) => setCaptchaToken(e.detail?.response ?? null);
-    el.addEventListener("frc:widget.complete", onDone);
-    return () => el.removeEventListener("frc:widget.complete", onDone);
+    const widget = _frcSdk.createWidget({
+      element: captchaRef.current,
+      sitekey: "FCMS9RCA6232KR7L",
+      startMode: "auto",
+    });
+    widget.addEventListener("frc:widget.complete", (e) =>
+      setCaptchaToken(e.detail?.response ?? null)
+    );
+    return () => widget.destroy();
   }, [modal]);
 
   // ── Load saved state (non-blocking, fires in background) ──
@@ -1453,9 +1451,7 @@ export default function App() {
                   {t.dupWarning}
                 </div>
               )}
-              <div style={{ marginBottom: "12px" }}>
-                <frc-captcha ref={captchaRef} sitekey="FCMS9RCA6232KR7L"></frc-captcha>
-              </div>
+              <div ref={captchaRef} style={{ marginBottom: "12px" }}></div>
 
               {/* ── Ausfülldauer ── */}
               {durationSec > 10 && (
