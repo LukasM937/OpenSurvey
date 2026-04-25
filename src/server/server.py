@@ -169,7 +169,7 @@ def _verify_captcha(token: str | None, ip: str) -> None:
     if not CAPTCHA_API_KEY:
         return  # dev mode — skip
 
-    if not token or not isinstance(token, str) or len(token) > 2048:
+    if not token or not isinstance(token, str) or len(token) > 20_000:
         log.warning("captcha-missing  ip=%s", ip)
         raise HTTPException(400, "Captcha fehlt oder ungültig")
 
