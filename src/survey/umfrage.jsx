@@ -1235,15 +1235,19 @@ export default function App() {
       startMode: "auto",
     });
     captchaWidgetRef.current = widget;
-    // Listen on both the widget object and the DOM element — the SDK
-    // dispatches frc:widget.complete on the container element in v2.
-    const onComplete = (e) => {
-      const response = e.detail?.response ?? widget.getResponse?.() ?? null;
-      if (response) setCaptchaToken(response);
+    // FriendlyCaptcha SDK v2 uses dot-prefixed placeholders (.UNVERIFIED etc.)
+    // during solving; only accept a response once it is a real signed token.
+    const accept = (response) => {
+      if (response && !response.startsWith(".")) setCaptchaToken(response);
     };
+    // Poll every 300 ms so we catch completion even if the event doesn't fire.
+    const timer = setInterval(() => accept(widget.getResponse?.()), 300);
+    // Also listen for events on both the widget object and the DOM element.
+    const onComplete = (e) => accept(e.detail?.response ?? widget.getResponse?.());
     widget.addEventListener("frc:widget.complete", onComplete);
     el.addEventListener("frc:widget.complete", onComplete);
     return () => {
+      clearInterval(timer);
       captchaWidgetRef.current = null;
       el.removeEventListener("frc:widget.complete", onComplete);
       widget.destroy();
@@ -1315,8 +1319,8 @@ export default function App() {
 
   // ── Server submit ──
   const doSubmit = async () => {
-    // Prefer the state value set by the event; fall back to reading directly from the widget.
-    const token = captchaToken ?? captchaWidgetRef.current?.getResponse() ?? null;
+    // Only use the token set by the polling/event handler (guaranteed to be a real signed token).
+    const token = captchaToken;
     if (!token) {
       setSendError("Bitte löse zuerst das Captcha.");
       return;
