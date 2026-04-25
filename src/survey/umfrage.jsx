@@ -1507,11 +1507,11 @@ export default function App() {
                   style={{ flex: 1, padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", background: "#fff", cursor: "pointer", fontSize: "13px", color: "#374151" }}>
                   {t.cancel}
                 </button>
-                <button onClick={doSubmit} disabled={sending || (newsletterEmail.length > 0 && !emailValid)}
+                <button onClick={doSubmit} disabled={sending || !captchaToken || (newsletterEmail.length > 0 && !emailValid)}
                   style={{ flex: 2, padding: "10px", border: "none", borderRadius: "8px",
-                    background: sending ? "#94a3b8" : (newsletterEmail.length > 0 && !emailValid) ? "#e2e8f0" : "#3b82f6",
-                    color: (newsletterEmail.length > 0 && !emailValid) ? "#94a3b8" : "#fff",
-                    cursor: sending || (newsletterEmail.length > 0 && !emailValid) ? "not-allowed" : "pointer",
+                    background: sending ? "#94a3b8" : (!captchaToken || (newsletterEmail.length > 0 && !emailValid)) ? "#e2e8f0" : "#3b82f6",
+                    color: (!captchaToken || (newsletterEmail.length > 0 && !emailValid)) ? "#94a3b8" : "#fff",
+                    cursor: sending || !captchaToken || (newsletterEmail.length > 0 && !emailValid) ? "not-allowed" : "pointer",
                     fontSize: "13px", fontWeight: "600" }}>
                   {sending ? t.sending : t.submit}
                 </button>
