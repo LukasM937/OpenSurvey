@@ -1216,6 +1216,29 @@ export default function App() {
   const [shareDuration, setShareDuration] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterConsent, setNewsletterConsent] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const captchaRef = useRef(null);
+
+  // Load FriendlyCaptcha SDK once
+  useEffect(() => {
+    if (document.querySelector('script[data-frc]')) return;
+    const s = document.createElement("script");
+    s.type = "module";
+    s.src = "https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/site.min.js";
+    s.crossOrigin = "anonymous";
+    s.dataset.frc = "1";
+    document.head.appendChild(s);
+  }, []);
+
+  // Re-attach captcha listener whenever modal opens
+  useEffect(() => {
+    if (!modal || !captchaRef.current) return;
+    setCaptchaToken(null);
+    const el = captchaRef.current;
+    const onDone = (e) => setCaptchaToken(e.detail?.response ?? null);
+    el.addEventListener("frc:captchaCompleted", onDone);
+    return () => el.removeEventListener("frc:captchaCompleted", onDone);
+  }, [modal]);
 
   // ── Load saved state (non-blocking, fires in background) ──
   useEffect(() => {
@@ -1302,6 +1325,7 @@ export default function App() {
           total:        TOTAL,
           duration_seconds: durationSec,
           responses:    normalized,
+          "frc-captcha-response": captchaToken,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1429,10 +1453,7 @@ export default function App() {
                   {t.dupWarning}
                 </div>
               )}
-              <script type="module"
-                src="https://cdn.jsdelivr.net/npm/@friendlycaptcha/sdk/site.min.js"
-                crossorigin="anonymous" defer></script>
-              <div class="frc-captcha" data-sitekey="FCMS9RCA6232KR7L"></div>
+              <div ref={captchaRef} className="frc-captcha" data-sitekey="FCMS9RCA6232KR7L" style={{ marginBottom: "12px" }}></div>
 
               {/* ── Ausfülldauer ── */}
               {durationSec > 10 && (
