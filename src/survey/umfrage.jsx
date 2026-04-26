@@ -1390,7 +1390,20 @@ export default function App() {
           "frc-captcha-response": token,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        // If the server rejected the captcha token, reset the widget so the user
+        // can solve a fresh challenge instead of retrying with an already-consumed token.
+        if (res.status === 400) {
+          try {
+            const errBody = await res.json();
+            if ((errBody?.detail ?? "").toLowerCase().includes("captcha")) {
+              setCaptchaToken(null);
+              captchaWidgetRef.current?.reset?.();
+            }
+          } catch {} // ignore parse errors – throw below handles it
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
 
       // Newsletter: separat senden, komplett entkoppelt von Umfragedaten
       // Keine Survey-ID wird mitgeschickt → Anonymität bleibt gewahrt

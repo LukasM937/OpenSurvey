@@ -465,9 +465,12 @@ step_frontend() {
 
   info "Copying source files to build directory…"
 
-  # Patch SERVER_URL to match the configured domain
+  # Patch SERVER_URL and captcha sitekey to match the configured domain/keys.
+  # Using the sitekey from setup.conf ensures the widget and the siteverify call
+  # always use the same key; a mismatch causes FriendlyCaptcha to reject every token.
   sed "s|const SERVER_URL = \"https://survey\.muehrke\.de/api/survey\";|const SERVER_URL = \"https://${SURVEY_DOMAIN}/api/survey\";|" \
     "${REPO_ROOT}/src/survey/umfrage.jsx" \
+  | sed "s|sitekey: \"FCMS9RCA6232KR7L\"|sitekey: \"${FRIENDLYCAPTCHA_SITEKEY:-FCMS9RCA6232KR7L}\"|g" \
     > "${BUILD_DIR}/src/App.jsx"
 
   # Also copy the question schema (may be imported by the JSX in the future)

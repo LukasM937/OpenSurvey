@@ -148,6 +148,9 @@ def _update_live_gauges() -> None:
 
 if not CAPTCHA_API_KEY:
     log.warning("FRIENDLYCAPTCHA_API_KEY not set – captcha verification disabled (dev mode)")
+elif not CAPTCHA_SITEKEY:
+    log.error("FRIENDLYCAPTCHA_API_KEY is set but FRIENDLYCAPTCHA_SITEKEY is empty – "
+              "every captcha verification will fail (sitekey mismatch)")
 
 try:
     import aggregator as _aggregator
