@@ -29,13 +29,11 @@ const storage = (() => {
 // Muss mit SCHEMA_HASH im server.py übereinstimmen.
 // Neu berechnen wenn Fragen hinzugefügt/entfernt werden:
 //   python3 -c "import hashlib,json; ids=sorted(['Q001',...,'Q108']); print(hashlib.sha256(json.dumps(ids,separators=(',',':')).encode()).hexdigest())"
-const SCHEMA_HASH = "acffb1411db2fd29f364346686654a3357a3700d9b1229d96495b49678a4146f";
+const SCHEMA_HASH = "243ef37991f8029ebc532d688129fb3b84b5bdf5449d0fe3824c8b2a8865e326";
 
 // Normalisiert alle Felder vor dem Senden:
 // - Übersprungene Fragen  → "__skipped__"  (wird server-seitig nicht als Antwort gezählt)
-// - Nicht beantwortet, numerisch → -1
-// - Nicht beantwortet, andere → "__ka__"
-const NUMERIC_TYPES = new Set(["number", "likert5", "slider7", "scale10"]);
+// - Nicht beantwortet    → "__ka__"
 function normalizeResponses(responses, sections) {
   const skipped = getSkippedIds(responses);
   const out = { ...responses };
@@ -44,7 +42,7 @@ function normalizeResponses(responses, sections) {
       if (skipped.has(q.id)) {
         out[q.id] = SKIP_SENTINEL;
       } else if (out[q.id] === undefined) {
-        out[q.id] = NUMERIC_TYPES.has(q.type) ? -1 : KA;
+        out[q.id] = KA;
       }
     }
   }
@@ -1390,7 +1388,20 @@ export default function App() {
           "frc-captcha-response": token,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        // If the server rejected the captcha token, reset the widget so the user
+        // can solve a fresh challenge instead of retrying with an already-consumed token.
+        if (res.status === 400) {
+          try {
+            const errBody = await res.json();
+            if ((errBody?.detail ?? "").toLowerCase().includes("captcha")) {
+              setCaptchaToken(null);
+              captchaWidgetRef.current?.reset?.();
+            }
+          } catch {} // ignore parse errors – throw below handles it
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
 
       // Newsletter: separat senden, komplett entkoppelt von Umfragedaten
       // Keine Survey-ID wird mitgeschickt → Anonymität bleibt gewahrt
