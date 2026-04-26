@@ -473,6 +473,12 @@ step_frontend() {
   | sed "s|sitekey: \"FCMS9RCA6232KR7L\"|sitekey: \"${FRIENDLYCAPTCHA_SITEKEY:-FCMS9RCA6232KR7L}\"|g" \
     > "${BUILD_DIR}/src/App.jsx"
 
+  # Override the Vite template index.css (its defaults set body {display:flex}
+  # and a dark background-color, which left-aligns the survey and shows a dark
+  # right margin on the page).
+  cp "${REPO_ROOT}/src/survey/index.css" \
+    "${BUILD_DIR}/src/index.css"
+
   # Also copy the question schema (may be imported by the JSX in the future)
   cp "${REPO_ROOT}/src/survey/umfrage_struktur.json" \
     "${BUILD_DIR}/public/umfrage_struktur.json"
