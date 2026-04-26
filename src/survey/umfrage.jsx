@@ -33,9 +33,7 @@ const SCHEMA_HASH = "243ef37991f8029ebc532d688129fb3b84b5bdf5449d0fe3824c8b2a886
 
 // Normalisiert alle Felder vor dem Senden:
 // - Übersprungene Fragen  → "__skipped__"  (wird server-seitig nicht als Antwort gezählt)
-// - Nicht beantwortet, numerisch → -1
-// - Nicht beantwortet, andere → "__ka__"
-const NUMERIC_TYPES = new Set(["number", "likert5", "slider7", "scale10"]);
+// - Nicht beantwortet    → "__ka__"
 function normalizeResponses(responses, sections) {
   const skipped = getSkippedIds(responses);
   const out = { ...responses };
@@ -44,7 +42,7 @@ function normalizeResponses(responses, sections) {
       if (skipped.has(q.id)) {
         out[q.id] = SKIP_SENTINEL;
       } else if (out[q.id] === undefined) {
-        out[q.id] = NUMERIC_TYPES.has(q.type) ? -1 : KA;
+        out[q.id] = KA;
       }
     }
   }
