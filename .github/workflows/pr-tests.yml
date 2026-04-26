@@ -1,0 +1,27 @@
+name: PR Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  integrity:
+    name: Schema & Translation Integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test runner
+        run: pip install pytest
+
+      - name: Run integrity tests
+        run: pytest tests/ -v --tb=short
