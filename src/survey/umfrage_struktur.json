@@ -4,7 +4,7 @@
     "subtitle": "Politik · Gesellschaft · Lebensverhältnisse",
     "version": "1.0.0-alpha",
     "notice": "Alle Fragen sind freiwillig. 'Keine Angabe' ist immer eine gültige Antwort. Die Umfrage ist anonym.",
-    "total_questions": 157
+    "total_questions": 163
   },
   "question_types": {
     "radio": "Einfachauswahl",
@@ -257,6 +257,18 @@
         {"id":"Q155","text":"\"Menschen werden in Deutschland aufgrund ihres Geschlechts oder ihrer Geschlechtsidentität systematisch benachteiligt.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
         {"id":"Q156","text":"\"Gezielte Fördermaßnahmen (z.B. Quoten) sind ein geeignetes Mittel um strukturelle Benachteiligungen auszugleichen.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"},
         {"id":"Q157","text":"\"Die gesellschaftliche Debatte über Diskriminierung und Gleichstellung ist übertrieben.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"}
+      ]
+    },
+    {
+      "id": "S18", "title": "Steuerpolitik",
+      "description": "Wie stehen Sie zu folgenden steuerpolitischen Maßnahmen?",
+      "questions": [
+        {"id":"Q158","text":"Sollte stärker gegen Steuervermeidung und organisierten Steuerbetrug vorgegangen werden?","type":"likert5","left":"Klar dagegen","right":"Klar dafür","group_header":"Steuerdurchsetzung:"},
+        {"id":"Q159","text":"Sollte die Steuerfahndung besser aufgestellt werden?","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
+        {"id":"Q160","text":"Sollten gesetzliche Schlupflöcher, die Steuervermeidung und Steuerbetrug ermöglichen, geschlossen werden?","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
+        {"id":"Q161","text":"Sollte eine gerechte Erbschaftssteuer eingeführt werden? (ab 2 Mio. €)","type":"likert5","left":"Klar dagegen","right":"Klar dafür","group_header":"Steuerreform:"},
+        {"id":"Q162","text":"Sollte eine gerechte Vermögenssteuer eingeführt werden? (ab 2 Mio. €)","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
+        {"id":"Q163","text":"Sollte eine Finanztransaktionsteuer eingeführt werden?","type":"likert5","left":"Klar dagegen","right":"Klar dafür"}
       ]
     },
     {

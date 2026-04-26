@@ -434,9 +434,15 @@ const TOOLTIPS = {
     Q155: "Misst die Wahrnehmung von Geschlechterdiskriminierung als strukturelles Problem, nicht als Einzelfall.",
     Q156: "Quoten und Fördermaßnahmen sind gesellschaftlich umstritten – diese Frage erfasst die Grundhaltung dazu.",
     Q157: "Diese Gegenfrage erlaubt es Menschen die Überdruss gegenüber der Gleichstellungsdebatte empfinden, das auszudrücken – wichtig für ein vollständiges Bild.",
+    // S18 – Steuerpolitik
+    Q158: "Steuerbetrug kostet den Staat jährlich schätzungsweise 108 Milliarden Euro – dieses Geld könnte für die Sanierung von Schulen, Kitas und der Bahn genutzt werden.",
+    Q159: "Die Steuerfahndung ist die Ermittlungsbehörde des Finanzamts. Eine bessere personelle und technische Ausstattung könnte die Aufdeckungsquote von Steuerbetrug erhöhen.",
+    Q160: "Bestimmte Konstrukte (z.B. Briefkastenfirmen, Cum-Ex-Geschäfte) nutzen Gesetzeslücken legal aus. Eine Schließung dieser Schlupflöcher würde das Steueraufkommen erhöhen.",
+    Q161: "Eine Erbschaftssteuer ab 2 Mio. € würde nur sehr große Vermögensübertragungen betreffen und könnte zur Umverteilung von Reichtum beitragen.",
+    Q162: "Eine Vermögenssteuer ab 2 Mio. € würde jährlich auf hohe Nettovermögen erhoben und soll zur Finanzierung öffentlicher Aufgaben beitragen.",
+    Q163: "Eine Finanztransaktionsteuer (z.B. 0,1 % auf Aktien- und Anleihehandel) soll spekulative Kurzfristgeschäfte eindämmen und Staatseinnahmen generieren.",
   },
   en: {
-    en: {
     // S01 – Sociodemographics
     Q001: "Your age helps compare opinions and attitudes across generations. Please state your current age in years.",
     Q002: "This refers to your personal gender identity – how you classify yourself, regardless of biological characteristics or legal registration.",
@@ -624,15 +630,42 @@ const TOOLTIPS = {
     Q155: "Measures perception of gender discrimination as a structural issue, not an individual case.",
     Q156: "Quotas and support measures are socially controversial – this question captures general attitudes toward them.",
     Q157: "This counter-question allows people who feel fatigue or frustration with equality debates to express that – important for a complete picture.",
-}
-    // Tooltip translations can be added here.
-    // Falls leer → automatischer Fallback auf Deutsch (via useTooltip unten).
+    // S18 – Tax Policy
+    Q158: "Tax fraud costs the state an estimated 108 billion euros annually – money that could be used to renovate schools, daycare centres, and railways.",
+    Q159: "The tax investigation unit is the investigative authority of the tax office. Better staffing and technical equipment could increase the detection rate of tax fraud.",
+    Q160: "Certain constructs (e.g. shell companies, cum-ex transactions) exploit legal loopholes. Closing these gaps would increase tax revenues.",
+    Q161: "An inheritance tax from €2 million would only affect very large wealth transfers and could contribute to redistribution.",
+    Q162: "A wealth tax from €2 million would be levied annually on high net assets to help finance public services.",
+    Q163: "A financial transaction tax (e.g. 0.1% on stock and bond trading) aims to curb speculative short-term trading and generate government revenues.",
   },
 };
 
 // Fallback: wenn Tooltip in gewählter Sprache fehlt, DE nehmen
 const useTooltip = (lang, qid) =>
   (TOOLTIPS[lang]?.[qid]) ?? (TOOLTIPS["de"]?.[qid]) ?? null;
+
+// ── Question & section text translations ──────────────────────
+// Only non-German entries are needed; German text lives in the SECTIONS array.
+// translateQ/translateSec merge a translation overlay onto the base object.
+const QUESTION_TEXTS = {
+  en: {
+    Q158: { text: "Should stronger action be taken against tax avoidance and organised tax fraud?",  group_header: "Tax enforcement:", left: "Clearly against", right: "Clearly in favour" },
+    Q159: { text: "Should the tax investigation unit be better resourced?",                           left: "Clearly against", right: "Clearly in favour" },
+    Q160: { text: "Should legal loopholes that enable tax avoidance and tax fraud be closed?",        left: "Clearly against", right: "Clearly in favour" },
+    Q161: { text: "Should a fair inheritance tax be introduced? (from €2 million)",  group_header: "Tax reform:", left: "Clearly against", right: "Clearly in favour" },
+    Q162: { text: "Should a fair wealth tax be introduced? (from €2 million)",                        left: "Clearly against", right: "Clearly in favour" },
+    Q163: { text: "Should a financial transaction tax be introduced?",                                left: "Clearly against", right: "Clearly in favour" },
+  },
+};
+
+const SECTION_TEXTS = {
+  en: {
+    S18: { title: "Tax Policy", description: "What is your stance on the following tax policy measures?" },
+  },
+};
+
+const translateQ   = (lang, q)   => { const t = QUESTION_TEXTS[lang]?.[q.id];   return t ? { ...q, ...t } : q; };
+const translateSec = (lang, sec) => { const t = SECTION_TEXTS[lang]?.[sec.id];  return t ? { ...sec, ...t } : sec; };
 
 // QuestionCard – hält Tooltip-State lokal, rendert Button und Panel als Geschwister.
 // Der Button sitzt in der Kopfzeile (flex), das Panel öffnet sich darunter in voller
@@ -1077,6 +1110,14 @@ const SECTIONS = [
     {id:"Q156",text:"\"Gezielte Fördermaßnahmen (z.B. Quoten) sind ein geeignetes Mittel um strukturelle Benachteiligungen auszugleichen.\"",type:"likert5",left:"Stimme gar nicht zu",right:"Stimme voll zu"},
     {id:"Q157",text:"\"Die gesellschaftliche Debatte über Diskriminierung und Gleichstellung ist übertrieben.\"",type:"likert5",left:"Stimme gar nicht zu",right:"Stimme voll zu"},
   ]},
+  {id:"S18",title:"Steuerpolitik",description:"Wie stehen Sie zu folgenden steuerpolitischen Maßnahmen?",questions:[
+    {id:"Q158",text:"Sollte stärker gegen Steuervermeidung und organisierten Steuerbetrug vorgegangen werden?",type:"likert5",left:"Klar dagegen",right:"Klar dafür",group_header:"Steuerdurchsetzung:"},
+    {id:"Q159",text:"Sollte die Steuerfahndung besser aufgestellt werden?",type:"likert5",left:"Klar dagegen",right:"Klar dafür"},
+    {id:"Q160",text:"Sollten gesetzliche Schlupflöcher, die Steuervermeidung und Steuerbetrug ermöglichen, geschlossen werden?",type:"likert5",left:"Klar dagegen",right:"Klar dafür"},
+    {id:"Q161",text:"Sollte eine gerechte Erbschaftssteuer eingeführt werden? (ab 2 Mio. €)",type:"likert5",left:"Klar dagegen",right:"Klar dafür",group_header:"Steuerreform:"},
+    {id:"Q162",text:"Sollte eine gerechte Vermögenssteuer eingeführt werden? (ab 2 Mio. €)",type:"likert5",left:"Klar dagegen",right:"Klar dafür"},
+    {id:"Q163",text:"Sollte eine Finanztransaktionsteuer eingeführt werden?",type:"likert5",left:"Klar dagegen",right:"Klar dafür"},
+  ]},
   {id:"S16",title:"Feedback & Kontakt",
    description:"Haben Sie Anmerkungen oder Verbesserungsvorschläge? Alle Angaben freiwillig und anonym.",
    questions:[
@@ -1283,6 +1324,7 @@ export default function App() {
   const answered   = Object.keys(resp).length;
   const pct        = Math.round(answered / TOTAL * 100);
   const sec        = SECTIONS[si];
+  const tSec       = translateSec(lang, sec);
   const skippedIds = getSkippedIds(resp);
   const secVisible = sec.questions.filter(q => !skippedIds.has(q.id));
   const secDone    = secVisible.filter(q => resp[q.id] !== undefined).length;
@@ -1596,18 +1638,19 @@ export default function App() {
         <div style={{ marginBottom: "20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
             <span style={{ fontFamily: "monospace", fontSize: "12px", background: "#dbeafe", color: "#1d4ed8", padding: "2px 8px", borderRadius: "5px", fontWeight: "600" }}>{sec.id}</span>
-            <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "#0f172a" }}>{sec.title}</h2>
+            <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "#0f172a" }}>{tSec.title}</h2>
             <span style={{ marginLeft: "auto", fontSize: "12px", color: "#94a3b8" }}>{secDone}/{secVisible.length}</span>
           </div>
-          {sec.description && (
+          {tSec.description && (
             <div style={{ fontSize: "13px", background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", borderRadius: "8px", padding: "10px 14px" }}>
-              {sec.description}
+              {tSec.description}
             </div>
           )}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {sec.questions.map(q => {
+            const tq = translateQ(lang, q);
             const skipped = skippedIds.has(q.id);
             return (
               <div key={q.id} style={{
@@ -1618,13 +1661,13 @@ export default function App() {
                 transition: "max-height .35s ease, opacity .25s ease, margin-bottom .35s ease",
                 pointerEvents: skipped ? "none" : "auto",
               }}>
-                {q.group_header && (
+                {tq.group_header && (
                   <div style={{ fontSize: "13px", fontWeight: "600", color: "#475569", background: "#f1f5f9", borderRadius: "8px", padding: "8px 12px", marginBottom: "8px", marginTop: "4px" }}>
-                    {q.group_header}
+                    {tq.group_header}
                   </div>
                 )}
                 <QuestionCard
-                  q={q}
+                  q={tq}
                   val={resp[q.id]}
                   onChange={v => setR(q.id, v)}
                   lang={lang}
