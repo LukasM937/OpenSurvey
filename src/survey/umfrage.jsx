@@ -644,6 +644,29 @@ const TOOLTIPS = {
 const useTooltip = (lang, qid) =>
   (TOOLTIPS[lang]?.[qid]) ?? (TOOLTIPS["de"]?.[qid]) ?? null;
 
+// ── Question & section text translations ──────────────────────
+// Only non-German entries are needed; German text lives in the SECTIONS array.
+// translateQ/translateSec merge a translation overlay onto the base object.
+const QUESTION_TEXTS = {
+  en: {
+    Q158: { text: "Should stronger action be taken against tax avoidance and organised tax fraud?",  group_header: "Tax enforcement:", left: "Clearly against", right: "Clearly in favour" },
+    Q159: { text: "Should the tax investigation unit be better resourced?",                           left: "Clearly against", right: "Clearly in favour" },
+    Q160: { text: "Should legal loopholes that enable tax avoidance and tax fraud be closed?",        left: "Clearly against", right: "Clearly in favour" },
+    Q161: { text: "Should a fair inheritance tax be introduced? (from €2 million)",  group_header: "Tax reform:", left: "Clearly against", right: "Clearly in favour" },
+    Q162: { text: "Should a fair wealth tax be introduced? (from €2 million)",                        left: "Clearly against", right: "Clearly in favour" },
+    Q163: { text: "Should a financial transaction tax be introduced?",                                left: "Clearly against", right: "Clearly in favour" },
+  },
+};
+
+const SECTION_TEXTS = {
+  en: {
+    S18: { title: "Tax Policy", description: "What is your stance on the following tax policy measures?" },
+  },
+};
+
+const translateQ   = (lang, q)   => { const t = QUESTION_TEXTS[lang]?.[q.id];   return t ? { ...q, ...t } : q; };
+const translateSec = (lang, sec) => { const t = SECTION_TEXTS[lang]?.[sec.id];  return t ? { ...sec, ...t } : sec; };
+
 // QuestionCard – hält Tooltip-State lokal, rendert Button und Panel als Geschwister.
 // Der Button sitzt in der Kopfzeile (flex), das Panel öffnet sich darunter in voller
 // Kartenbreite, sodass der Fragetext nie zusammengeschoben wird.
@@ -1301,6 +1324,7 @@ export default function App() {
   const answered   = Object.keys(resp).length;
   const pct        = Math.round(answered / TOTAL * 100);
   const sec        = SECTIONS[si];
+  const tSec       = translateSec(lang, sec);
   const skippedIds = getSkippedIds(resp);
   const secVisible = sec.questions.filter(q => !skippedIds.has(q.id));
   const secDone    = secVisible.filter(q => resp[q.id] !== undefined).length;
@@ -1614,18 +1638,19 @@ export default function App() {
         <div style={{ marginBottom: "20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
             <span style={{ fontFamily: "monospace", fontSize: "12px", background: "#dbeafe", color: "#1d4ed8", padding: "2px 8px", borderRadius: "5px", fontWeight: "600" }}>{sec.id}</span>
-            <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "#0f172a" }}>{sec.title}</h2>
+            <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "#0f172a" }}>{tSec.title}</h2>
             <span style={{ marginLeft: "auto", fontSize: "12px", color: "#94a3b8" }}>{secDone}/{secVisible.length}</span>
           </div>
-          {sec.description && (
+          {tSec.description && (
             <div style={{ fontSize: "13px", background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", borderRadius: "8px", padding: "10px 14px" }}>
-              {sec.description}
+              {tSec.description}
             </div>
           )}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {sec.questions.map(q => {
+            const tq = translateQ(lang, q);
             const skipped = skippedIds.has(q.id);
             return (
               <div key={q.id} style={{
@@ -1636,13 +1661,13 @@ export default function App() {
                 transition: "max-height .35s ease, opacity .25s ease, margin-bottom .35s ease",
                 pointerEvents: skipped ? "none" : "auto",
               }}>
-                {q.group_header && (
+                {tq.group_header && (
                   <div style={{ fontSize: "13px", fontWeight: "600", color: "#475569", background: "#f1f5f9", borderRadius: "8px", padding: "8px 12px", marginBottom: "8px", marginTop: "4px" }}>
-                    {q.group_header}
+                    {tq.group_header}
                   </div>
                 )}
                 <QuestionCard
-                  q={q}
+                  q={tq}
                   val={resp[q.id]}
                   onChange={v => setR(q.id, v)}
                   lang={lang}
