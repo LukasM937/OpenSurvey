@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenSurvey Admin</title>
+<style>
+:root {
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --surface2: #21262d;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --muted:    #8b949e;
+  --accent:   #58a6ff;
+  --green:    #3fb950;
+  --yellow:   #d29922;
+  --red:      #f85149;
+  --radius:   6px;
+  --gap:      16px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  padding: var(--gap);
+}
+a { color: var(--accent); text-decoration: none; }
+
+/* ── Layout ── */
+.page { max-width: 960px; margin: 0 auto; }
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+header h1 { font-size: 18px; font-weight: 600; flex: 1; }
+header h1 span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
+
+.status-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+.status-dot.ok    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.status-dot.error { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+
+/* ── Token bar ── */
+.token-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+.token-bar label { color: var(--muted); white-space: nowrap; font-size: 12px; }
+.token-bar input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 5px 10px;
+  font-family: monospace;
+  font-size: 13px;
+}
+.token-bar input:focus { outline: none; border-color: var(--accent); }
+
+/* ── Buttons ── */
+button {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0d1117;
+  font-weight: 600;
+}
+button.primary:hover { opacity: 0.85; color: #0d1117; }
+button.danger:hover { border-color: var(--red); color: var(--red); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Banner ── */
+.banner {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  font-size: 13px;
+  border: 1px solid;
+}
+.banner.error  { background: #2d0f0f; border-color: var(--red);    color: #fca5a5; }
+.banner.warn   { background: #2d2000; border-color: var(--yellow);  color: #fde68a; }
+.banner.info   { background: #0d1f33; border-color: var(--accent);  color: #93c5fd; }
+.banner.show   { display: flex; }
+
+/* ── Cards ── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--gap);
+  margin-bottom: 24px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.card-label { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 6px; }
+.card-value { font-size: 28px; font-weight: 700; line-height: 1; }
+.card-sub   { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.card-value.green  { color: var(--green); }
+.card-value.yellow { color: var(--yellow); }
+.card-value.red    { color: var(--red); }
+
+/* ── Two-col grid ── */
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+  margin-bottom: 24px;
+}
+@media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+
+/* ── Panel ── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.panel h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  margin-bottom: 14px;
+}
+
+/* ── Monthly bar chart ── */
+.month-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.month-label { width: 62px; flex-shrink: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.month-bar-wrap { flex: 1; background: var(--surface2); border-radius: 3px; height: 18px; overflow: hidden; }
+.month-bar { height: 100%; background: var(--accent); border-radius: 3px; min-width: 2px; transition: width .4s ease; }
+.month-count { width: 36px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+/* ── Lang / region pills ── */
+.pill-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 13px;
+}
+.pill-count { color: var(--accent); font-weight: 600; }
+
+/* ── Full-width panel ── */
+.panel-full {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 24px;
+}
+.panel-full h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  margin-bottom: 14px;
+}
+
+/* ── Newsletter section ── */
+.newsletter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.newsletter-note {
+  flex: 1;
+  min-width: 200px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 5px 10px;
+  font-size: 13px;
+}
+.newsletter-note:focus { outline: none; border-color: var(--accent); }
+
+/* ── Footer ── */
+footer {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+footer code {
+  font-family: monospace;
+  background: var(--surface2);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.auto-refresh-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.auto-refresh-toggle input { cursor: pointer; }
+
+/* ── Skeleton loader ── */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 4px;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <header>
+    <div class="status-dot" id="statusDot"></div>
+    <h1>OpenSurvey Admin <span id="lastUpdated"></span></h1>
+    <button id="refreshBtn" onclick="refresh()">&#8635; Aktualisieren</button>
+  </header>
+
+  <!-- Token bar -->
+  <div class="token-bar" id="tokenBar">
+    <label for="tokenInput">Admin-Token</label>
+    <input type="password" id="tokenInput" placeholder="••••••••••••••••" autocomplete="current-password">
+    <button class="primary" onclick="saveToken()">Verbinden</button>
+    <button class="danger hidden" id="clearBtn" onclick="clearToken()">Token löschen</button>
+  </div>
+
+  <!-- Error / warn banners -->
+  <div class="banner error"  id="bannerError"></div>
+  <div class="banner warn"   id="bannerWarn"></div>
+  <div class="banner info"   id="bannerInfo"></div>
+
+  <!-- Stat cards -->
+  <div class="cards" id="cards">
+    <div class="card">
+      <div class="card-label">Einreichungen gesamt</div>
+      <div class="card-value" id="cardTotal">—</div>
+      <div class="card-sub" id="cardTotalSub"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Diesen Monat</div>
+      <div class="card-value" id="cardMonth">—</div>
+      <div class="card-sub" id="cardMonthSub"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Newsletter-Abonnenten</div>
+      <div class="card-value" id="cardNewsletter">—</div>
+      <div class="card-sub"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Freier Speicher</div>
+      <div class="card-value" id="cardDisk">—</div>
+      <div class="card-sub" id="cardDiskSub"></div>
+    </div>
+  </div>
+
+  <!-- Monthly + breakdown grid -->
+  <div class="grid2">
+    <div class="panel">
+      <h2>Einreichungen pro Monat</h2>
+      <div id="monthChart"><span style="color:var(--muted);font-size:12px">Keine Daten</span></div>
+    </div>
+    <div class="panel">
+      <h2>Sprache</h2>
+      <div id="langPills" style="margin-bottom:16px"><span style="color:var(--muted);font-size:12px">Keine Daten</span></div>
+      <h2 style="margin-top:12px">Region (Bundesland)</h2>
+      <div id="regionPills"><span style="color:var(--muted);font-size:12px">Keine Daten</span></div>
+    </div>
+  </div>
+
+  <!-- Newsletter access log -->
+  <div class="panel-full">
+    <h2>Newsletter-Zugriff (DSGVO-Audit)</h2>
+    <div class="newsletter-row">
+      <input class="newsletter-note" id="accessNote" type="text" placeholder="Optionale Notiz (z.B. E-Mail-Versand April 2025)" maxlength="200">
+      <button class="primary" id="accessBtn" onclick="logAccess()">Zugriff protokollieren</button>
+    </div>
+    <div id="accessResult" style="margin-top:10px;font-size:13px;color:var(--muted)"></div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <span>Schema-Hash: <code id="schemaHash">—</code></span>
+    <label class="auto-refresh-toggle">
+      <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh(this)">
+      Auto-Refresh (30s)
+    </label>
+    <span id="footerStatus"></span>
+  </footer>
+
+</div>
+
+<script>
+/* ── State ── */
+let _token  = sessionStorage.getItem('admin_token') || '';
+let _timer  = null;
+let _stats  = null;
+let _health = null;
+
+/* ── Init ── */
+(function init() {
+  if (_token) {
+    document.getElementById('tokenInput').value = _token;
+    document.getElementById('clearBtn').classList.remove('hidden');
+  }
+  refresh();
+  startAutoRefresh();
+})();
+
+/* ── Token management ── */
+function saveToken() {
+  const val = document.getElementById('tokenInput').value.trim();
+  if (!val) return showBanner('error', 'Bitte Token eingeben.');
+  _token = val;
+  sessionStorage.setItem('admin_token', _token);
+  document.getElementById('clearBtn').classList.remove('hidden');
+  hideBanners();
+  refresh();
+}
+
+function clearToken() {
+  _token = '';
+  sessionStorage.removeItem('admin_token');
+  document.getElementById('tokenInput').value = '';
+  document.getElementById('clearBtn').classList.add('hidden');
+  _stats = null;
+  renderCards(null, null);
+  renderMonthChart(null);
+  renderBreakdown(null);
+}
+
+document.getElementById('tokenInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveToken();
+});
+
+/* ── Fetch helpers ── */
+async function fetchHealth() {
+  const r = await fetch('/health');
+  if (!r.ok) throw new Error(`/health → ${r.status}`);
+  return r.json();
+}
+
+async function fetchStats() {
+  if (!_token) throw new Error('no_token');
+  const r = await fetch('/admin/api/stats', {
+    headers: { 'X-Admin-Token': _token }
+  });
+  if (r.status === 401) throw new Error('bad_token');
+  if (!r.ok) throw new Error(`/admin/api/stats → ${r.status}`);
+  return r.json();
+}
+
+/* ── Main refresh ── */
+async function refresh() {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  hideBanners();
+
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot';
+
+  let healthOk = false;
+  let statsOk  = false;
+  const warns = [];
+
+  try {
+    _health = await fetchHealth();
+    healthOk = true;
+  } catch (e) {
+    warns.push('Health-Endpoint nicht erreichbar: ' + e.message);
+  }
+
+  if (_token) {
+    try {
+      _stats = await fetchStats();
+      statsOk = true;
+    } catch (e) {
+      if (e.message === 'bad_token') {
+        showBanner('error', 'Ungültiger Admin-Token.');
+      } else if (e.message === 'no_token') {
+        /* silent */
+      } else {
+        warns.push('Stats-Endpoint: ' + e.message);
+      }
+    }
+  } else {
+    showBanner('info', 'Token eingeben, um Einreichungsdaten zu sehen.');
+  }
+
+  dot.className = 'status-dot ' + (healthOk || statsOk ? 'ok' : 'error');
+
+  if (warns.length) showBanner('warn', warns.join(' · '));
+
+  renderCards(_stats, _health);
+  renderMonthChart(_stats);
+  renderBreakdown(_stats);
+  renderFooter(_stats);
+
+  document.getElementById('lastUpdated').textContent =
+    '· Stand: ' + new Date().toLocaleTimeString('de-DE');
+  btn.disabled = false;
+}
+
+/* ── Render: stat cards ── */
+function renderCards(stats, health) {
+  const set = (id, val, cls) => {
+    const el = document.getElementById(id);
+    el.textContent = val ?? '—';
+    el.className = 'card-value' + (cls ? ' ' + cls : '');
+  };
+
+  if (stats) {
+    const months = Object.entries(stats.by_month || {});
+    const now = new Date();
+    const key = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const thisMonth = stats.by_month?.[key] ?? 0;
+    const lastKey   = months.length > 1 ? months[months.length - 2][0] : null;
+    const lastCount = lastKey ? stats.by_month[lastKey] : null;
+
+    set('cardTotal', stats.total?.toLocaleString('de-DE'));
+    document.getElementById('cardTotalSub').textContent =
+      months.length ? `über ${months.length} Monat${months.length > 1 ? 'e' : ''}` : '';
+
+    set('cardMonth', thisMonth.toLocaleString('de-DE'));
+    document.getElementById('cardMonthSub').textContent =
+      lastCount !== null ? `${lastKey}: ${lastCount.toLocaleString('de-DE')}` : '';
+
+    const nl = stats.newsletter_count ?? -1;
+    set('cardNewsletter', nl >= 0 ? nl.toLocaleString('de-DE') : '—');
+  } else {
+    ['cardTotal','cardMonth','cardNewsletter'].forEach(id => set(id, '—'));
+    ['cardTotalSub','cardMonthSub'].forEach(id => {
+      document.getElementById(id).textContent = '';
+    });
+  }
+
+  if (health) {
+    const free = health.disk_free_mb;
+    const used = health.disk_used_mb;
+    const cls  = free < 500 ? 'red' : free < 2000 ? 'yellow' : 'green';
+    set('cardDisk', fmtMB(free), cls);
+    document.getElementById('cardDiskSub').textContent =
+      `${fmtMB(used)} genutzt`;
+  } else {
+    set('cardDisk', '—');
+    document.getElementById('cardDiskSub').textContent = '';
+  }
+}
+
+function fmtMB(mb) {
+  if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
+  return mb + ' MB';
+}
+
+/* ── Render: monthly bar chart ── */
+function renderMonthChart(stats) {
+  const el = document.getElementById('monthChart');
+  if (!stats?.by_month || Object.keys(stats.by_month).length === 0) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:12px">Keine Daten</span>';
+    return;
+  }
+  const entries = Object.entries(stats.by_month);
+  const max = Math.max(...entries.map(([,v]) => v), 1);
+  el.innerHTML = entries.map(([month, count]) => {
+    const pct = Math.max(2, Math.round((count / max) * 100));
+    return `
+      <div class="month-row">
+        <span class="month-label">${month}</span>
+        <div class="month-bar-wrap"><div class="month-bar" style="width:${pct}%"></div></div>
+        <span class="month-count">${count.toLocaleString('de-DE')}</span>
+      </div>`;
+  }).join('');
+}
+
+/* ── Render: language + region breakdown ── */
+function renderBreakdown(stats) {
+  renderPills('langPills', stats?.by_lang);
+  renderPills('regionPills', stats?.by_region, { limit: 12 });
+}
+
+function renderPills(id, data, opts = {}) {
+  const el = document.getElementById(id);
+  if (!data || Object.keys(data).length === 0) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:12px">Keine Daten</span>';
+    return;
+  }
+  let entries = Object.entries(data).sort(([,a],[,b]) => b - a);
+  if (opts.limit) entries = entries.slice(0, opts.limit);
+  el.innerHTML = '<div class="pill-list">' +
+    entries.map(([k, v]) =>
+      `<span class="pill">${esc(k)} <span class="pill-count">${v.toLocaleString('de-DE')}</span></span>`
+    ).join('') +
+    '</div>';
+}
+
+/* ── Render: footer ── */
+function renderFooter(stats) {
+  const h = _health;
+  document.getElementById('schemaHash').textContent =
+    h?.schema_hash ? h.schema_hash.slice(0,12) + '…' : '—';
+}
+
+/* ── Newsletter access log ── */
+async function logAccess() {
+  if (!_token) { showBanner('error', 'Token erforderlich.'); return; }
+  const btn = document.getElementById('accessBtn');
+  const note = document.getElementById('accessNote').value.trim();
+  const res  = document.getElementById('accessResult');
+  btn.disabled = true;
+  res.textContent = 'Sende…';
+  try {
+    const r = await fetch('/admin/api/newsletter-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': _token },
+      body: JSON.stringify({ note }),
+    });
+    const json = await r.json();
+    if (r.ok) {
+      res.style.color = 'var(--green)';
+      res.textContent =
+        `✓ Protokolliert: ${json.subscriber_count} Abonnenten · ${new Date(json.accessed_at).toLocaleString('de-DE')}`;
+      document.getElementById('accessNote').value = '';
+    } else {
+      res.style.color = 'var(--red)';
+      res.textContent = `Fehler: ${json.detail ?? r.status}`;
+    }
+  } catch (e) {
+    res.style.color = 'var(--red)';
+    res.textContent = 'Netzwerkfehler: ' + e.message;
+  }
+  btn.disabled = false;
+}
+
+/* ── Auto-refresh ── */
+function startAutoRefresh() {
+  _timer = setInterval(refresh, 30_000);
+}
+function stopAutoRefresh() {
+  clearInterval(_timer);
+  _timer = null;
+}
+function toggleAutoRefresh(cb) {
+  cb.checked ? startAutoRefresh() : stopAutoRefresh();
+}
+
+/* ── Banner helpers ── */
+function showBanner(type, msg) {
+  hideBanners();
+  const el = document.getElementById('banner' + type.charAt(0).toUpperCase() + type.slice(1));
+  if (el) { el.textContent = msg; el.classList.add('show'); }
+}
+function hideBanners() {
+  document.querySelectorAll('.banner').forEach(b => b.classList.remove('show'));
+}
+
+/* ── XSS-safe escape ── */
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+</body>
+</html>

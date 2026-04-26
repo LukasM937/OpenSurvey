@@ -585,7 +585,7 @@ async def receive_survey(request: Request) -> JSONResponse:
 
 @app.get("/health")
 async def health(request: Request) -> JSONResponse:
-    if get_ip(request) not in ("127.0.0.1", "::1"):
+    if not _is_local(get_ip(request)):
         raise HTTPException(404)
     usage = shutil.disk_usage(DATA_DIR)
     months = {
