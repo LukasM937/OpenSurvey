@@ -29,7 +29,7 @@ const storage = (() => {
 // Muss mit SCHEMA_HASH im server.py übereinstimmen.
 // Neu berechnen wenn Fragen hinzugefügt/entfernt werden:
 //   python3 -c "import hashlib,json; ids=sorted(['Q001',...,'Q108']); print(hashlib.sha256(json.dumps(ids,separators=(',',':')).encode()).hexdigest())"
-const SCHEMA_HASH = "3e37d44b007956234fa6faa2b14d44e05f21509d3a4d2a72f2221160e6e91009";
+const SCHEMA_HASH = "d2ef102181a6bb25bdf7afc97f571b30ecaa315053d16f35e378e1c57fa7ee1d";
 
 // Normalisiert alle Felder vor dem Senden:
 // - Übersprungene Fragen  → "__skipped__"  (wird server-seitig nicht als Antwort gezählt)
@@ -1373,6 +1373,132 @@ function PartyMultiCombobox({val=[], onChange}) {
   );
 }
 
+// ── PoliticianCombobox ────────────────────────────────────────
+
+const POLITICIANS = [
+  // Bundesebene
+  {name:"Friedrich Merz",        info:"CDU – Bundeskanzler"},
+  {name:"Olaf Scholz",           info:"SPD – ehem. Bundeskanzler"},
+  {name:"Robert Habeck",         info:"Grüne"},
+  {name:"Annalena Baerbock",     info:"Grüne"},
+  {name:"Christian Lindner",     info:"FDP"},
+  {name:"Alice Weidel",          info:"AfD"},
+  {name:"Tino Chrupalla",        info:"AfD"},
+  {name:"Sahra Wagenknecht",     info:"BSW"},
+  {name:"Karl Lauterbach",       info:"SPD"},
+  {name:"Boris Pistorius",       info:"SPD"},
+  {name:"Lars Klingbeil",        info:"SPD"},
+  {name:"Saskia Esken",          info:"SPD"},
+  {name:"Omid Nouripour",        info:"Grüne"},
+  {name:"Ricarda Lang",          info:"Grüne"},
+  {name:"Wolfgang Kubicki",      info:"FDP"},
+  {name:"Marco Buschmann",       info:"FDP"},
+  {name:"Dietmar Bartsch",       info:"Linke"},
+  {name:"Janine Wissler",        info:"Linke"},
+  {name:"Markus Söder",          info:"CSU – Bayern"},
+  {name:"Hubert Aiwanger",       info:"Freie Wähler – Bayern"},
+  // Landesebene
+  {name:"Peter Tschentscher",    info:"SPD – Hamburg"},
+  {name:"Kai Wegner",            info:"CDU – Berlin"},
+  {name:"Hendrik Wüst",          info:"CDU – Nordrhein-Westfalen"},
+  {name:"Boris Rhein",           info:"CDU – Hessen"},
+  {name:"Winfried Kretschmann",  info:"Grüne – Baden-Württemberg"},
+  {name:"Manuela Schwesig",      info:"SPD – Mecklenburg-Vorpommern"},
+  {name:"Dietmar Woidke",        info:"SPD – Brandenburg"},
+  {name:"Daniel Günther",        info:"CDU – Schleswig-Holstein"},
+  {name:"Mario Voigt",           info:"CDU – Thüringen"},
+  {name:"Peter Hauk",            info:"CDU – Baden-Württemberg"},
+  {name:"Andreas Bovenschulte",  info:"SPD – Bremen"},
+  {name:"Stephan Weil",          info:"SPD – Niedersachsen"},
+  // International
+  {name:"Donald Trump",          info:"USA – Präsident"},
+  {name:"Kamala Harris",         info:"USA"},
+  {name:"Bernie Sanders",        info:"USA"},
+  {name:"Emmanuel Macron",       info:"Frankreich – Präsident"},
+  {name:"Marine Le Pen",         info:"Frankreich"},
+  {name:"Giorgia Meloni",        info:"Italien – Premierministerin"},
+  {name:"Viktor Orbán",          info:"Ungarn – Premierminister"},
+  {name:"Papst Franziskus",      info:"Vatikan"},
+  {name:"Ursula von der Leyen",  info:"EU-Kommissionspräsidentin"},
+  {name:"Volodymyr Zelensky",    info:"Ukraine – Präsident"},
+  {name:"Vladimir Putin",        info:"Russland – Präsident"},
+  {name:"Xi Jinping",            info:"China – Staatschef"},
+  {name:"Benjamin Netanyahu",    info:"Israel – Premierminister"},
+  {name:"Elon Musk",             info:"USA – Unternehmer"},
+];
+
+const matchPolitician = (p, q) => {
+  const lq = q.toLowerCase();
+  return p.name.toLowerCase().includes(lq) || p.info.toLowerCase().includes(lq);
+};
+
+function PoliticianCombobox({val, onChange}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen]   = useState(false);
+  const [hov, setHov]     = useState(null);
+
+  const filtered = query.length > 0 ? POLITICIANS.filter(p => matchPolitician(p, query)) : POLITICIANS;
+  const isKA     = val === KA;
+  const display  = val && !isKA ? val : "";
+
+  const select = v => { onChange(v); setQuery(""); setOpen(false); };
+
+  const row = key => ({
+    padding:"8px 12px", cursor:"pointer", fontSize:"13px",
+    display:"flex", gap:"10px", alignItems:"baseline",
+    background: hov===key ? "#f1f5f9" : "transparent"
+  });
+
+  return (
+    <div style={{position:"relative"}}>
+      <div style={{position:"relative"}}>
+        <input type="text"
+          value={open ? query : display}
+          onChange={e => { setQuery(e.target.value); setOpen(true); onChange(undefined); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 180)}
+          onKeyDown={e => { if (e.key === "Enter" && query.trim()) { select(query.trim()); e.preventDefault(); } }}
+          placeholder={isKA ? "— Keine Angabe —" : "Name suchen oder eingeben…"}
+          style={{
+            width:"100%", padding:"9px 36px 9px 12px",
+            border:`1px solid ${val && !isKA ? "#93c5fd" : "#e2e8f0"}`,
+            borderRadius:"8px", fontSize:"13px", outline:"none",
+            boxSizing:"border-box", fontFamily:"inherit",
+            background: isKA ? "#f8fafc" : "#fff",
+            color: isKA ? "#94a3b8" : "#1e293b"
+          }} />
+        {val && !isKA && (
+          <button onMouseDown={e => { e.preventDefault(); onChange(undefined); setQuery(""); }}
+            style={{position:"absolute",right:"10px",top:"50%",transform:"translateY(-50%)",border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:"14px",padding:0}}>
+            ✕
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div style={{position:"absolute",top:"calc(100% + 3px)",left:0,right:0,maxHeight:"220px",overflowY:"auto",background:"#fff",border:"1px solid #e2e8f0",borderRadius:"8px",boxShadow:"0 6px 20px rgba(0,0,0,.1)",zIndex:200}}>
+          {filtered.length === 0 && (
+            <div style={{padding:"10px 12px",fontSize:"13px",color:"#94a3b8",fontStyle:"italic"}}>
+              Nicht in Liste – Freitexteingabe möglich (Enter bestätigt)
+            </div>
+          )}
+          {filtered.map(p => (
+            <div key={p.name}
+              onMouseDown={e => { e.preventDefault(); select(p.name); }}
+              onMouseEnter={() => setHov(p.name)} onMouseLeave={() => setHov(null)}
+              style={row(p.name)}>
+              <span style={{fontWeight:"600",color:"#1d4ed8",minWidth:"180px",flexShrink:0}}>{p.name}</span>
+              <span style={{color:"#64748b",fontSize:"11px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.info}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <KABtn active={isKA} onClick={() => { onChange(KA); setOpen(false); setQuery(""); }} />
+    </div>
+  );
+}
+
 // ── Survey sections data ──────────────────────────────────────
 
 const SECTIONS = [
@@ -1399,6 +1525,9 @@ const SECTIONS = [
     {id:"Q016",text:"Kinder außerhalb des Haushalts?",type:"radio",opts:["Nein","Ja, 1","Ja, 2","Ja, 3 oder mehr"]},
     {id:"Q017",text:"Pflegeaufgaben für Angehörige?",type:"radio",opts:["Nein","Ja, gelegentlich","Ja, regelmäßig","Ja, Hauptpflegeperson"]},
     {id:"Q018",text:"Anteil an Haus- und Sorgearbeit im Haushalt?",type:"radio",opts:["< 20 %","20–40 %","40–60 % (ca. gleich)","60–80 %","> 80 %","Alleinlebend / n.a."]},
+    {id:"Q179",text:"Wie sehr machen Ihnen der Rückgang der Geburtenrate Sorgen?",type:"likert5",left:"Keine Sorgen",right:"Große Sorgen",group_header:"Geburtenrate:"},
+    {id:"Q180",text:"Welche Maßnahmen halten Sie für sinnvoll, um die Geburtenrate zu verbessern? (Mehrfachauswahl)",type:"check",opts:["Bessere Kinderbetreuung (Kita-Ausbau, Kosten)","Höheres Elterngeld / Kindergeld","Flexiblere Arbeitszeiten für Eltern","Günstigerer Wohnraum für Familien","Gleichere Verteilung von Sorgearbeit zwischen den Geschlechtern","Kostenfreie Bildung (Schule, Hochschule)","Steuerliche Entlastung für Familien","Bessere Vereinbarkeit von Karriere und Familie","Keine – der Staat sollte sich nicht einmischen","Sonstiges"]},
+    {id:"Q181",text:'„Eine ungleiche Verteilung von Familien- und Sorgearbeit zwischen Frauen und Männern ist eine wesentliche Ursache für die niedrige Geburtenrate."',type:"likert5",left:"Stimme gar nicht zu",right:"Stimme voll zu"},
   ]},
   {id:"S03",title:"Wirtschaft & Finanzen",questions:[
     {id:"Q019",text:"Monatliches Haushaltsnettoeinkommen?",type:"radio",opts:["< 1.000 €","1.000–1.500 €","1.500–2.000 €","2.000–2.500 €","2.500–3.000 €","3.000–4.000 €","4.000–5.000 €","5.000–7.500 €","7.500–10.000 €","> 10.000 €"]},
@@ -1424,6 +1553,7 @@ const SECTIONS = [
     {id:"Q037",text:"Bundestagswahl 2025 – Zweitstimme:",type:"party_single",extras:["Nicht gewählt","Nicht wahlberechtigt"],group_header:"Wahlverhalten:",skip_if:{q:"Q109",op:"eq",val:"Nein"}},
     {id:"Q038",text:"Wenn morgen Bundestagswahl: Wen würden Sie wählen?",type:"party_single",extras:["Würde nicht wählen","Ungültig wählen"]},
     {id:"Q039",text:"Wie sicher sind Sie bei dieser Wahlentscheidung?",type:"likert5",left:"Sehr unsicher",right:"Sehr sicher"},
+    {id:"Q178",text:"Warum würden Sie diese Partei wählen?",type:"text",skip_if:{q:"Q038",op:"in",val:["Würde nicht wählen","Ungültig wählen"]}},
     {id:"Q040",text:"Koalitionspräferenz – welche Parteien sollten regieren?",type:"party_multi"},
   ]},
   {id:"S05",title:"Parteikompetenz",description:"Welcher Partei trauen Sie bei den folgenden Themen am meisten Kompetenz zu?",questions:[
@@ -1594,6 +1724,18 @@ const SECTIONS = [
     {id:"Q162",text:"Sollte eine gerechte Vermögenssteuer eingeführt werden? (ab 2 Mio. €)",type:"likert5",left:"Klar dagegen",right:"Klar dafür"},
     {id:"Q163",text:"Sollte eine Finanztransaktionsteuer eingeführt werden?",type:"likert5",left:"Klar dagegen",right:"Klar dafür"},
   ]},
+  {id:"S20",title:"Politikerpräferenzen",
+   description:"Wen finden Sie am sympathischsten – und wen am wenigsten? Freitexteingabe ist möglich, falls ein Name nicht in der Liste erscheint.",
+   questions:[
+    {id:"Q182",text:"Beliebteste:r Politiker:in auf lokaler Ebene (Gemeinde, Stadt, Kreis):",type:"text",group_header:"Lokal:"},
+    {id:"Q183",text:"Unbeliebteste:r Politiker:in auf lokaler Ebene:",type:"text"},
+    {id:"Q184",text:"Beliebteste:r Politiker:in auf Landesebene:",type:"politician_single",group_header:"Landesebene:"},
+    {id:"Q185",text:"Unbeliebteste:r Politiker:in auf Landesebene:",type:"politician_single"},
+    {id:"Q186",text:"Beliebteste:r Politiker:in auf Bundesebene:",type:"politician_single",group_header:"Bundesebene:"},
+    {id:"Q187",text:"Unbeliebteste:r Politiker:in auf Bundesebene:",type:"politician_single"},
+    {id:"Q188",text:"Beliebteste:r Politiker:in international:",type:"politician_single",group_header:"International:"},
+    {id:"Q189",text:"Unbeliebteste:r Politiker:in international:",type:"politician_single"},
+  ]},
   {id:"S16",title:"Feedback & Kontakt",
    description:"Haben Sie Anmerkungen oder Verbesserungsvorschläge? Alle Angaben freiwillig und anonym.",
    questions:[
@@ -1707,9 +1849,10 @@ function QInput({q,val,onChange}) {
     case "number":       return <NumInput q={q} val={val} onChange={onChange}/>;
     case "text":         return <TxtInput val={val} onChange={onChange}/>;
     case "scale10":      return <Scale10 val={val} onChange={onChange}/>;
-    case "party_single": return <PartyCombobox val={val} onChange={onChange} extras={q.extras||[]}/>;
-    case "party_multi":  return <PartyMultiCombobox val={val} onChange={onChange}/>;
-    case "plz":          return <PlzInput val={val} onChange={onChange}/>;
+    case "party_single":     return <PartyCombobox val={val} onChange={onChange} extras={q.extras||[]}/>;
+    case "party_multi":      return <PartyMultiCombobox val={val} onChange={onChange}/>;
+    case "politician_single":return <PoliticianCombobox val={val} onChange={onChange}/>;
+    case "plz":              return <PlzInput val={val} onChange={onChange}/>;
     default: return null;
   }
 }

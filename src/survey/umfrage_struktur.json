@@ -4,7 +4,7 @@
     "subtitle": "Politik · Gesellschaft · Lebensverhältnisse",
     "version": "1.0.0-alpha",
     "notice": "Alle Fragen sind freiwillig. 'Keine Angabe' ist immer eine gültige Antwort. Die Umfrage ist anonym.",
-    "total_questions": 177
+    "total_questions": 189
   },
   "question_types": {
     "radio": "Einfachauswahl",
@@ -16,6 +16,7 @@
     "scale10": "0-10 Skala (SOEP-Standard)",
     "party_single": "Parteiauswahl (Einfach, Combobox)",
     "party_multi": "Parteiauswahl (Mehrfach, Combobox)",
+    "politician_single": "Politikerauswahl (Einfach, Combobox)",
     "plz": "Postleitzahl (5 Ziffern)"
   },
   "parties": ["CDU","CSU","SPD","Grüne","FDP","AfD","BSW","Linke","Freie Wähler","Volt","SSW","Piraten","ÖDP","Tierschutzpartei","Die PARTEI","Humanisten","WerteUnion","Bündnis Deutschland","Die Basis","MLPD","DKP","Die Heimat","BIG","MERA25","Bündnis C","DSU","APPD","Gesundheitsforschung","LIEBE"],
@@ -47,7 +48,10 @@
         {"id":"Q015","text":"Altersgruppen der Kinder im Haushalt:","type":"check","opts":["< 3 Jahre","3–6 Jahre","6–12 Jahre","12–18 Jahre","18+ (noch im HH)"],"skip_if":{"q":"Q014","op":"eq","val":0}},
         {"id":"Q016","text":"Kinder außerhalb des Haushalts?","type":"radio","opts":["Nein","Ja, 1","Ja, 2","Ja, 3 oder mehr"]},
         {"id":"Q017","text":"Pflegeaufgaben für Angehörige?","type":"radio","opts":["Nein","Ja, gelegentlich","Ja, regelmäßig","Ja, Hauptpflegeperson"]},
-        {"id":"Q018","text":"Anteil an Haus- und Sorgearbeit im Haushalt?","type":"radio","opts":["< 20 %","20–40 %","40–60 % (ca. gleich)","60–80 %","> 80 %","Alleinlebend / n.a."]}
+        {"id":"Q018","text":"Anteil an Haus- und Sorgearbeit im Haushalt?","type":"radio","opts":["< 20 %","20–40 %","40–60 % (ca. gleich)","60–80 %","> 80 %","Alleinlebend / n.a."]},
+        {"id":"Q179","text":"Wie sehr machen Ihnen der Rückgang der Geburtenrate Sorgen?","type":"likert5","left":"Keine Sorgen","right":"Große Sorgen","group_header":"Geburtenrate:"},
+        {"id":"Q180","text":"Welche Maßnahmen halten Sie für sinnvoll, um die Geburtenrate zu verbessern? (Mehrfachauswahl)","type":"check","opts":["Bessere Kinderbetreuung (Kita-Ausbau, Kosten)","Höheres Elterngeld / Kindergeld","Flexiblere Arbeitszeiten für Eltern","Günstigerer Wohnraum für Familien","Gleichere Verteilung von Sorgearbeit zwischen den Geschlechtern","Kostenfreie Bildung (Schule, Hochschule)","Steuerliche Entlastung für Familien","Bessere Vereinbarkeit von Karriere und Familie","Keine – der Staat sollte sich nicht einmischen","Sonstiges"]},
+        {"id":"Q181","text":"\"Eine ungleiche Verteilung von Familien- und Sorgearbeit zwischen Frauen und Männern ist eine wesentliche Ursache für die niedrige Geburtenrate.\"","type":"likert5","left":"Stimme gar nicht zu","right":"Stimme voll zu"}
       ]
     },
     {
@@ -79,6 +83,7 @@
         {"id":"Q037","text":"Bundestagswahl 2025 – Zweitstimme:","type":"party_single","extras":["Nicht gewählt","Nicht wahlberechtigt"],"group_header":"Wahlverhalten:","skip_if":{"q":"Q109","op":"eq","val":"Nein"}},
         {"id":"Q038","text":"Wenn morgen Bundestagswahl: Wen würden Sie wählen?","type":"party_single","extras":["Würde nicht wählen","Ungültig wählen"]},
         {"id":"Q039","text":"Wie sicher sind Sie bei dieser Wahlentscheidung?","type":"likert5","left":"Sehr unsicher","right":"Sehr sicher"},
+        {"id":"Q178","text":"Warum würden Sie diese Partei wählen?","type":"text","skip_if":{"q":"Q038","op":"in","val":["Würde nicht wählen","Ungültig wählen"]}},
         {"id":"Q040","text":"Koalitionspräferenz – welche Parteien sollten regieren?","type":"party_multi"}
       ]
     },
@@ -289,6 +294,20 @@
         {"id":"Q161","text":"Sollte eine gerechte Erbschaftssteuer eingeführt werden? (ab 2 Mio. €)","type":"likert5","left":"Klar dagegen","right":"Klar dafür","group_header":"Steuerreform:"},
         {"id":"Q162","text":"Sollte eine gerechte Vermögenssteuer eingeführt werden? (ab 2 Mio. €)","type":"likert5","left":"Klar dagegen","right":"Klar dafür"},
         {"id":"Q163","text":"Sollte eine Finanztransaktionsteuer eingeführt werden?","type":"likert5","left":"Klar dagegen","right":"Klar dafür"}
+      ]
+    },
+    {
+      "id": "S20", "title": "Politikerpräferenzen",
+      "description": "Wen finden Sie am sympathischsten – und wen am wenigsten? Freitexteingabe ist möglich, falls ein Name nicht in der Liste erscheint.",
+      "questions": [
+        {"id":"Q182","text":"Beliebteste:r Politiker:in auf lokaler Ebene (Gemeinde, Stadt, Kreis):","type":"text","group_header":"Lokal:"},
+        {"id":"Q183","text":"Unbeliebteste:r Politiker:in auf lokaler Ebene:","type":"text"},
+        {"id":"Q184","text":"Beliebteste:r Politiker:in auf Landesebene:","type":"politician_single","group_header":"Landesebene:"},
+        {"id":"Q185","text":"Unbeliebteste:r Politiker:in auf Landesebene:","type":"politician_single"},
+        {"id":"Q186","text":"Beliebteste:r Politiker:in auf Bundesebene:","type":"politician_single","group_header":"Bundesebene:"},
+        {"id":"Q187","text":"Unbeliebteste:r Politiker:in auf Bundesebene:","type":"politician_single"},
+        {"id":"Q188","text":"Beliebteste:r Politiker:in international:","type":"politician_single","group_header":"International:"},
+        {"id":"Q189","text":"Unbeliebteste:r Politiker:in international:","type":"politician_single"}
       ]
     },
     {
