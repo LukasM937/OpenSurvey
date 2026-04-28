@@ -1,7 +1,7 @@
 # Deutsche Gesellschaftsstudie
 
 An open-source, anonymous survey on demographics, political attitudes, and living
-conditions in Germany — 157 questions across 17 thematic sections.
+conditions in Germany — 177 questions across 19 thematic sections.
 
 **Live:** [survey.muehrke.de](https://survey.muehrke.de)
 
@@ -15,21 +15,33 @@ Collected data will be published on [Zenodo](https://zenodo.org) under CC BY 4.0
 once a sufficient number of responses has been gathered.
 
 The survey covers:
-- Sociodemographics (age, education, income, housing)
-- Family & household structure
+- Sociodemographics (age, gender, orientation, education, occupation)
+- Family & household structure, care work distribution
+- Economic situation (income, wealth, housing, debt, transfers)
 - Political orientation, voting behaviour, party competence
-- Trust in institutions and democracy satisfaction
+- Trust in institutions, democracy satisfaction, media use
+- Key issues, safety perception, civic engagement
 - Energy, mobility, and geopolitics
-- Religion, migration background, legal experiences
+- Religion, migration background, asylum & refugee experiences
+- Legal experiences
 - Life satisfaction and social connectedness
+- Attitudes & self-perception (digital literacy, AI, values, disability)
+- Discrimination & equality (personal experiences, equality attitudes)
+- Tax policy
+- Substance use & drug policy
+- Feedback
 
 ---
 
 ## Features
 
-- **157 questions · 17 sections** — including skip logic (20+ rules), Likert scales,
+- **177 questions · 19 sections** — including skip logic (29 rules), Likert scales,
   sliders, multi-select, and free-text fields
-- **Multilingual** — German complete; English, Turkish, Ukrainian, Polish in progress
+- **Multilingual** — German complete; English, Turkish, Ukrainian, Polish complete;
+  Arabic and Spanish in progress; French, Italian, Danish, Swedish pending
+- **Integrity test suite** — `tests/test_integrity.py` verifies schema consistency
+  across `umfrage_struktur.json`, `server.py`, and `umfrage.jsx` (question IDs,
+  types, hash, skip-logic operators, translations); runs on every PR via GitHub Actions
 - **Schema-hash validation** — client and server agree on the question set before
   any data is written to disk
 - **Hardened backend** — rate limiting, depth-limited JSON parsing, body field
@@ -73,7 +85,7 @@ The survey covers:
 src/
   survey/
     umfrage.jsx              React frontend (questions, skip logic, i18n, storage adapter)
-    umfrage_struktur.json    Machine-readable question schema (157 questions, 17 sections)
+    umfrage_struktur.json    Machine-readable question schema (177 questions, 19 sections)
   server/
     server.py                FastAPI backend
     aggregator.py            Data aggregation + k-anonymity export (Bundesland + PLZ)
@@ -90,9 +102,14 @@ deploy/
   umfrage-server.service     Systemd unit with hardening
   survey.muehrke.de.conf     Apache HTTP → HTTPS redirect
   survey.muehrke.de-le-ssl.conf  Apache HTTPS + reverse proxy
+  nginx-snippet.conf         nginx rate-limit + proxy snippet (alternative to Apache)
   prometheus.yml             Prometheus scrape config (targets /admin/metrics)
   grafana/
     dashboard.json           Import-ready Grafana dashboard (24 panels, 6 rows)
+tests/
+  test_integrity.py          Schema & translation integrity tests (pytest)
+.github/workflows/
+  pr-tests.yml               CI: runs integrity tests on every PR and push to main
 ```
 
 ---
@@ -106,8 +123,8 @@ deploy/
   the subscriber list must be recorded via `POST /admin/api/newsletter-access`,
   which appends an entry (timestamp, IP, subscriber count, optional note) to
   `/var/data/newsletter/access_log.ndjson`
-- **Publication** will exclude free-text fields (Q052, Q064) and postal codes (Q121);
-  regional breakdowns are suppressed below the 50-submission threshold
+- **Publication** will exclude free-text fields (Q052, Q064, Q142, Q143, Q151)
+  and postal codes (Q121); regional breakdowns are suppressed below the 50-submission threshold
 - All published texts use the wording:
   > "Diese Umfrage ist anonym. Es werden keine personenbezogenen Daten erhoben."
 
@@ -370,11 +387,9 @@ sudo chmod 640 /opt/survey-server/admin/index.html /opt/survey-server/results/in
 curl http://localhost:8742/health
 
 # Survey submission — captcha is skipped when FRIENDLYCAPTCHA_API_KEY is unset
-HASH="$(python3 -c "
-import hashlib, json
-ids = sorted([f'Q{i:03d}' for i in range(1,158)])
-print(hashlib.sha256(json.dumps(ids,separators=(',',':')).encode()).hexdigest())
-")"
+# The server logs the current schema hash at startup; retrieve it with:
+#   journalctl -u umfrage-server | grep Schema-Hash
+HASH="<schema-hash-from-startup-log>"
 curl -X POST http://localhost:8742/api/survey \
   -H "Content-Type: application/json" \
   -d "{\"id\":\"test001\",\"schema_hash\":\"$HASH\",\"responses\":{}}"
@@ -477,16 +492,29 @@ The dashboard has 24 panels across 6 rows:
 <summary>13 · Adding questions</summary>
 
 1. Add question to `SECTIONS` in `umfrage.jsx`
-2. Recalculate schema hash:
+2. Add the new ID to `VALID_QUESTION_IDS` and `QUESTION_TYPES` in `server.py`
+3. Recalculate schema hash — the server recomputes it automatically on startup
+   from `VALID_QUESTION_IDS`, so run the server once and read the logged hash:
    ```bash
+   journalctl -u umfrage-server | grep Schema-Hash
+   # or, without starting the server:
    python3 -c "
-   import hashlib, json
-   ids = sorted([f'Q{i:03d}' for i in range(1, 159)])  # adjust range
-   print(hashlib.sha256(json.dumps(ids, separators=(',',':')).encode()).hexdigest())
+   import hashlib, json, ast
+   from pathlib import Path
+   tree = ast.parse(Path('/opt/survey-server/server.py').read_text())
+   for node in ast.walk(tree):
+       if isinstance(node, ast.AnnAssign):
+           t, v = node.target, node.value
+       elif isinstance(node, ast.Assign) and len(node.targets)==1:
+           t, v = node.targets[0], node.value
+       else: continue
+       if isinstance(t, ast.Name) and t.id=='VALID_QUESTION_IDS':
+           ids = sorted(e.value for e in v.args[0].elts)
+           print(hashlib.sha256(json.dumps(ids,separators=(',',':')).encode()).hexdigest())
+           break
    "
    ```
-3. Update `SCHEMA_HASH` in `umfrage.jsx`
-4. Add to `VALID_QUESTION_IDS` and `QUESTION_TYPES` in `server.py`
+4. Update `SCHEMA_HASH` in `umfrage.jsx` with the printed value
 
 | Survey type | Server type |
 |---|---|
@@ -497,10 +525,14 @@ The dashboard has 24 panels across 6 rows:
 | `scale10` | `int0-10` |
 | `number` | `int` |
 | `party_single` | `str` |
-| `party_multi` | `str` |
+| `party_multi` | `list` |
 
 5. Update `umfrage_struktur.json` to include the new question (or use the schema
    editor in the admin dashboard at `/admin` → **Questions** tab)
+6. Run the integrity tests to verify all three files are in sync:
+   ```bash
+   cd /path/to/OpenSurvey && pytest tests/ -v
+   ```
 
 > **Note:** each question ID may appear in exactly one type group. Duplicate entries
 > across the `**{...}` dict comprehensions silently overwrite each other — the last
