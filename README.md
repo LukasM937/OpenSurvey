@@ -1,7 +1,7 @@
 # Deutsche Gesellschaftsstudie
 
 An open-source, anonymous survey on demographics, political attitudes, and living
-conditions in Germany — 177 questions across 19 thematic sections.
+conditions in Germany — 189 questions across 20 thematic sections.
 
 **Live:** [survey.muehrke.de](https://survey.muehrke.de)
 
@@ -35,10 +35,12 @@ The survey covers:
 
 ## Features
 
-- **177 questions · 19 sections** — including skip logic (29 rules), Likert scales,
+- **189 questions · 20 sections** — including skip logic, Likert scales,
   sliders, multi-select, and free-text fields
-- **Multilingual** — German complete; English, Turkish, Ukrainian, Polish complete;
-  Arabic and Spanish in progress; French, Italian, Danish, Swedish pending
+- **Multilingual** — German and English complete (UI strings, tooltips, all question
+  texts); Turkish, Ukrainian, Polish complete (UI strings + section titles); Arabic
+  and Spanish have UI strings + section titles with question texts as stubs; French,
+  Italian, Danish, Swedish have section titles only (UI falls back to German)
 - **Integrity test suite** — `tests/test_integrity.py` verifies schema consistency
   across `umfrage_struktur.json`, `server.py`, and `umfrage.jsx` (question IDs,
   types, hash, skip-logic operators, translations); runs on every PR via GitHub Actions
@@ -84,8 +86,11 @@ The survey covers:
 ```
 src/
   survey/
-    umfrage.jsx              React frontend (questions, skip logic, i18n, storage adapter)
-    umfrage_struktur.json    Machine-readable question schema (177 questions, 19 sections)
+    umfrage.jsx              React frontend (skip logic, storage adapter, rendering)
+    umfrage_struktur.json    Machine-readable question schema (189 questions, 20 sections)
+    i18n/                    Per-language translation modules (de, en, tr, uk, pl,
+                             fr, es, it, ar, da, sv); each exports ui, tooltips,
+                             questions, and sections fields
   server/
     server.py                FastAPI backend
     aggregator.py            Data aggregation + k-anonymity export (Bundesland + PLZ)
@@ -491,7 +496,7 @@ The dashboard has 24 panels across 6 rows:
 <details>
 <summary>13 · Adding questions</summary>
 
-1. Add question to `SECTIONS` in `umfrage.jsx`
+1. Add question to `umfrage_struktur.json` (or use the schema editor in the admin dashboard)
 2. Add the new ID to `VALID_QUESTION_IDS` and `QUESTION_TYPES` in `server.py`
 3. Recalculate schema hash — the server recomputes it automatically on startup
    from `VALID_QUESTION_IDS`, so run the server once and read the logged hash:
@@ -527,9 +532,9 @@ The dashboard has 24 panels across 6 rows:
 | `party_single` | `str` |
 | `party_multi` | `list` |
 
-5. Update `umfrage_struktur.json` to include the new question (or use the schema
-   editor in the admin dashboard at `/admin` → **Questions** tab)
-6. Run the integrity tests to verify all three files are in sync:
+5. Optionally add translated question text to `src/survey/i18n/en.js` (and other
+   language files) under the `questions` key
+6. Run the integrity tests to verify all files are in sync:
    ```bash
    cd /path/to/OpenSurvey && pytest tests/ -v
    ```
