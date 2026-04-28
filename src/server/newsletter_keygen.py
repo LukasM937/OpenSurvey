@@ -3,13 +3,15 @@
 Einmalig ausführen als newsletter-User um das Schlüsselpaar zu generieren.
   sudo -u newsletter python3 newsletter_keygen.py
 """
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
+
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from pathlib import Path
-import os, sys
+import os
+import sys
 
 PRIV_PATH = Path("/home/newsletter/private/newsletter_priv.pem")
-PUB_PATH  = Path("/etc/survey/newsletter_pub.pem")
+PUB_PATH = Path("/etc/survey/newsletter_pub.pem")
 
 if PRIV_PATH.exists():
     print(f"FEHLER: {PRIV_PATH} existiert bereits. Abbruch.")
@@ -43,8 +45,9 @@ os.chmod(PUB_PATH, 0o644)
 print(f"Public Key:  {PUB_PATH}  (chmod 644)")
 
 print("\n✓ Schlüsselpaar generiert.")
-print(f"\nPublic Key Fingerprint (SHA-256):")
+print("\nPublic Key Fingerprint (SHA-256):")
 import hashlib
+
 fp = hashlib.sha256(pub_pem).hexdigest()
 print(f"  {fp[:16]}...{fp[-16:]}")
 print("\nNächster Schritt: Public Key Pfad in server.py eintragen.")

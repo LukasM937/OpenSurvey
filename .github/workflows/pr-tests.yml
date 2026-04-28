@@ -25,3 +25,83 @@ jobs:
 
       - name: Run integrity tests
         run: pytest tests/ -v --tb=short
+
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint Python (ruff check)
+        run: ruff check src/server/ tests/
+
+      - name: Format Python (ruff format)
+        run: ruff format --check src/server/ tests/
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/survey/package.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: src/survey
+
+      - name: Lint JSX (ESLint)
+        run: npm run lint
+        working-directory: src/survey
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -r src/server/requirements.txt
+
+      - name: Verify Python server imports
+        run: |
+          mkdir -p /tmp/survey-ci
+          SURVEY_DATA_DIR=/tmp/survey-ci python -c "
+          import sys
+          sys.path.insert(0, 'src/server')
+          import server
+          print('server.py imported successfully')
+          print(f'  schema hash : {server.SCHEMA_HASH[:16]}…')
+          print(f'  questions   : {len(server.VALID_QUESTION_IDS)}')
+          "
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/survey/package.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: src/survey
+
+      - name: Build frontend (Vite)
+        run: npm run build
+        working-directory: src/survey
