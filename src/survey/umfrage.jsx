@@ -1076,6 +1076,7 @@ const SECTION_TEXTS = {
     S17: { title: "Diskriminering & Jämlikhet", description: "Dessa frågor rör personliga erfarenheter och samhälleliga attityder. Alla inmatningar är frivilliga och anonyma." },
     S18: { title: "Skattepolitik", description: "Vad är din inställning till följande skattepolitiska åtgärder?" },
     S19: { title: "Beroende & Substansbruk", description: "Alla inmatningar är frivilliga och anonyma. 'Inget svar' är alltid giltigt." },
+  },
   es: {
     S01: { title: "Sociodemografía" },
     S02: { title: "Familia y Hogar" },
