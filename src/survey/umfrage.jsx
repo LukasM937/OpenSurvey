@@ -29,7 +29,7 @@ const storage = (() => {
 // Muss mit SCHEMA_HASH im server.py übereinstimmen.
 // Neu berechnen wenn Fragen hinzugefügt/entfernt werden:
 //   python3 -c "import hashlib,json; ids=sorted(['Q001',...,'Q108']); print(hashlib.sha256(json.dumps(ids,separators=(',',':')).encode()).hexdigest())"
-const SCHEMA_HASH = "243ef37991f8029ebc532d688129fb3b84b5bdf5449d0fe3824c8b2a8865e326";
+const SCHEMA_HASH = "3eb80a8d20f9e35b0c063a4b8d9e76176d785ab94d9bc156232cd8813acfc0e6";
 
 // Normalisiert alle Felder vor dem Senden:
 // - Übersprungene Fragen  → "__skipped__"  (wird server-seitig nicht als Antwort gezählt)
@@ -851,6 +851,7 @@ const SECTION_TEXTS = {
     S16: { title: "Feedback & Contact", description: "Do you have any comments or suggestions for improvement? All entries are voluntary and anonymous." },
     S17: { title: "Discrimination & Equality", description: "These questions relate to personal experiences and societal attitudes. All entries are voluntary and anonymous." },
     S18: { title: "Tax Policy", description: "What is your stance on the following tax policy measures?" },
+    S19: { title: "Addiction & Substance Use", description: "All entries are voluntary and anonymous. 'No answer' is always valid." },
   },
 };
 
@@ -1261,6 +1262,19 @@ const SECTIONS = [
     {id:"Q105",text:"Wie oft fühlen Sie sich einsam?",type:"radio",opts:["Nie","Selten","Manchmal","Oft","Fast immer"]},
     {id:"Q106",text:"Stärke Ihres sozialen Netzwerks:",type:"likert5",left:"Sehr schwach / isoliert",right:"Sehr stark / gut vernetzt"},
     {id:"Q107",text:"Kontakt zu Menschen mit anderen politischen Überzeugungen im Alltag:",type:"radio",opts:["Nie","Selten","Manchmal","Oft","Täglich"]},
+  ]},
+  {id:"S19",title:"Sucht & Substanzkonsum",
+   description:"Alle Angaben sind freiwillig und anonym. 'Keine Angabe' ist jederzeit gültig.",
+   questions:[
+    {id:"Q164",text:"Welche der folgenden Substanzen konsumieren Sie regelmäßig? (Mehrfachauswahl)",type:"check",opts:["Zucker / Süßigkeiten / Softdrinks","Koffein (Kaffee, Energydrinks, Tee)","Nasenspray (schleimhautabschwellend, z.B. Xylometazolin)","Nikotin (Zigaretten, E-Zigarette, Snus, Kautabak)","Alkohol","Rezeptfreie Schlaf- oder Beruhigungsmittel","Keines davon"]},
+    {id:"Q165",text:"Wie oft trinken Sie Alkohol?",type:"radio",opts:["Nie","Selten (einige Male pro Jahr)","Gelegentlich (1–3x pro Monat)","Wöchentlich (1–3x pro Woche)","Mehrmals pro Woche","Täglich"]},
+    {id:"Q166",text:"Wie viele Standardgläser Alkohol trinken Sie dabei üblicherweise pro Anlass?",type:"radio",opts:["1–2 Gläser","3–4 Gläser","5–6 Gläser","7 oder mehr Gläser"],skip_if:{q:"Q165",op:"eq",val:"Nie"}},
+    {id:"Q167",text:"Wie oft konsumieren Sie Koffein (Kaffee, Energydrinks, Tee, etc.)?",type:"radio",opts:["Nie","Selten / unregelmäßig","1x täglich","2–3x täglich","Mehr als 3x täglich"]},
+    {id:"Q168",text:"Nutzen Sie abschwellende Nasensprays regelmäßig (z.B. Xylometazolin)?",type:"radio",opts:["Nein","Ja, gelegentlich (situationsbedingt)","Ja, regelmäßig (mehrmals pro Woche oder täglich)","Ja, ich verspüre eine Abhängigkeit davon"]},
+    {id:"Q169",text:"Rauchen Sie oder konsumieren Sie Nikotinprodukte?",type:"radio",opts:["Nein, nie geraucht","Nein, aber früher (aufgehört)","Ja, gelegentlich (weniger als täglich)","Ja, täglich"]},
+    {id:"Q170",text:"Haben Sie schon einmal illegale Substanzen konsumiert?",type:"radio",opts:["Nein, nie","Ja, einmalig / experimentell","Ja, in der Vergangenheit (aktuell nicht mehr)","Ja, gelegentlich (aktuell)","Ja, regelmäßig (aktuell)"]},
+    {id:"Q171",text:"Welche illegalen Substanzen haben Sie konsumiert? (Mehrfachauswahl)",type:"check",opts:["Cannabis / Marihuana / Haschisch","Ecstasy / MDMA","Kokain / Crack","Amphetamine / Speed","Methamphetamin (Crystal Meth)","LSD / Psychedelika (Pilze, Mescalin)","Heroin / Opiate","Ketamin","Neue psychoaktive Substanzen (NPS / Legal Highs)","Sonstiges"],skip_if:{q:"Q170",op:"eq",val:"Nein, nie"}},
+    {id:"Q172",text:"Wie häufig konsumieren Sie derzeit illegale Substanzen?",type:"radio",opts:["Gar nicht (nur früher)","Selten (wenige Male pro Jahr)","Gelegentlich (monatlich)","Regelmäßig (wöchentlich)","Häufig (mehrmals pro Woche oder täglich)"],skip_if:{q:"Q170",op:"eq",val:"Nein, nie"}},
   ]},
   {id:"S15",title:"Einstellungen & Selbstwahrnehmung",questions:[
     {id:"Q123",text:"Wie sicher sind Sie sich generell bei politischen Themen?",type:"likert5",left:"Sehr unsicher",right:"Sehr sicher"},
