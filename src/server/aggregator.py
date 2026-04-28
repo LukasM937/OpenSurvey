@@ -9,6 +9,7 @@ Public interface:
     get_plz_export(data_dir)     → PLZ k-anon scientific export
     invalidate_cache()           → force reload on next call
 """
+
 import json
 import re
 import statistics
@@ -19,16 +20,17 @@ from pathlib import Path
 from typing import Any
 
 K_ANON_THRESHOLD = 50
-REGION_QUESTION  = "Q004"   # Bundesland
-PLZ_QUESTION     = "Q121"   # Postleitzahl
-SKIP_IN_EXPORT   = frozenset({"Q052", "Q064", "Q121"})  # free text + PLZ
+REGION_QUESTION = "Q004"  # Bundesland
+PLZ_QUESTION = "Q121"  # Postleitzahl
+SKIP_IN_EXPORT = frozenset({"Q052", "Q064", "Q121"})  # free text + PLZ
 
 _cache: dict[str, Any] = {}
 _cache_lock = threading.Lock()
-CACHE_TTL   = 300.0  # 5 minutes
+CACHE_TTL = 300.0  # 5 minutes
 
 
 # ── Helpers ───────────────────────────────────────────────────
+
 
 def _load_records(data_dir: Path) -> list[dict]:
     recs = []
@@ -43,7 +45,7 @@ def _load_records(data_dir: Path) -> list[dict]:
 def _agg_question(values: list) -> dict:
     """Aggregate raw values for one question into counts + numeric stats."""
     counts: dict[str, int] = defaultdict(int)
-    numerics: list[float]  = []
+    numerics: list[float] = []
 
     for v in values:
         if v is None or v == "__skipped__":
@@ -60,7 +62,7 @@ def _agg_question(values: list) -> dict:
 
     result: dict[str, Any] = {"counts": dict(counts), "n": sum(counts.values())}
     if numerics:
-        result["mean"]   = round(statistics.mean(numerics), 2)
+        result["mean"] = round(statistics.mean(numerics), 2)
         result["median"] = statistics.median(numerics)
         if len(numerics) > 1:
             result["stdev"] = round(statistics.stdev(numerics), 2)
@@ -110,6 +112,7 @@ def _cached(key: str, builder):
 
 # ── PLZ iterative bundling ─────────────────────────────────────
 
+
 def _bundle_by_plz(records: list[dict]) -> list[dict]:
     """
     Groups records by PLZ with iterative prefix broadening until k-anonymity is met.
@@ -146,15 +149,15 @@ def _bundle_by_plz(records: list[dict]) -> list[dict]:
         for prefix, plzs in sorted(by_prefix.items()):
             group_recs = [r for p in plzs for r in unassigned[p]]
             if len(group_recs) >= K_ANON_THRESHOLD:
-                published.append({
-                    "prefix":       prefix,
-                    "resolution":   resolution,
-                    "n":            len(group_recs),
-                    "plzs_covered": sorted(plzs),
-                    "questions":    _agg_records(
-                        group_recs, skip=SKIP_IN_EXPORT | {PLZ_QUESTION}
-                    ),
-                })
+                published.append(
+                    {
+                        "prefix": prefix,
+                        "resolution": resolution,
+                        "n": len(group_recs),
+                        "plzs_covered": sorted(plzs),
+                        "questions": _agg_records(group_recs, skip=SKIP_IN_EXPORT | {PLZ_QUESTION}),
+                    }
+                )
             else:
                 for p in plzs:
                     next_unassigned[p] = unassigned[p]
@@ -163,24 +166,28 @@ def _bundle_by_plz(records: list[dict]) -> list[dict]:
 
     pool = [r for recs in unassigned.values() for r in recs] + no_plz
     if pool:
-        published.append({
-            "prefix":       "national_pool",
-            "resolution":   0,
-            "n":            len(pool),
-            "plzs_covered": sorted(unassigned.keys()),
-            "questions":    _agg_records(pool, skip=SKIP_IN_EXPORT | {PLZ_QUESTION}),
-        })
+        published.append(
+            {
+                "prefix": "national_pool",
+                "resolution": 0,
+                "n": len(pool),
+                "plzs_covered": sorted(unassigned.keys()),
+                "questions": _agg_records(pool, skip=SKIP_IN_EXPORT | {PLZ_QUESTION}),
+            }
+        )
 
     return sorted(published, key=lambda b: (-b["resolution"], b.get("prefix", "")))
 
 
 # ── Public API ────────────────────────────────────────────────
 
+
 def get_admin_stats(data_dir: Path) -> dict:
     """Full stats for admin dashboard (no k-anon, includes all questions)."""
+
     def build():
         records = _load_records(data_dir)
-        n       = len(records)
+        n = len(records)
         regions = _region_groups(records)
 
         completion: dict[str, float] = {}
@@ -190,68 +197,71 @@ def get_admin_stats(data_dir: Path) -> dict:
                 all_qids.update(r.get("responses", {}).keys())
             for qid in sorted(all_qids):
                 answered = sum(
-                    1 for r in records
-                    if r.get("responses", {}).get(qid) not in (None, "__skipped__", "__ka__")
+                    1 for r in records if r.get("responses", {}).get(qid) not in (None, "__skipped__", "__ka__")
                 )
                 completion[qid] = round(answered / n, 3)
 
         return {
-            "total":           n,
-            "by_month":        _monthly_counts(records),
-            "by_lang":         _lang_counts(records),
-            "by_region":       {k: len(v) for k, v in sorted(regions.items())},
+            "total": n,
+            "by_month": _monthly_counts(records),
+            "by_lang": _lang_counts(records),
+            "by_region": {k: len(v) for k, v in sorted(regions.items())},
             "completion_rate": completion,
-            "questions":       _agg_records(records),
+            "questions": _agg_records(records),
         }
+
     return _cached(f"admin:{data_dir}", build)
 
 
 def get_public_stats(data_dir: Path) -> dict:
     """Bundesland k-anonymous aggregates for public results page."""
+
     def build():
         records = _load_records(data_dir)
-        n       = len(records)
+        n = len(records)
         regions = _region_groups(records)
 
         regional: dict[str, Any] = {}
-        suppressed: list[str]    = []
+        suppressed: list[str] = []
         for region, recs in sorted(regions.items()):
             if region in ("__ka__", "__skipped__", "None"):
                 continue
             if len(recs) >= K_ANON_THRESHOLD:
                 regional[region] = {
-                    "n":         len(recs),
+                    "n": len(recs),
                     "questions": _agg_records(recs, skip=SKIP_IN_EXPORT | {REGION_QUESTION}),
                 }
             else:
                 suppressed.append(region)
 
         return {
-            "total":              n,
-            "by_month":           _monthly_counts(records),
-            "national":           _agg_records(records, skip=SKIP_IN_EXPORT),
-            "regional":           regional,
-            "k_anon_threshold":   K_ANON_THRESHOLD,
+            "total": n,
+            "by_month": _monthly_counts(records),
+            "national": _agg_records(records, skip=SKIP_IN_EXPORT),
+            "regional": regional,
+            "k_anon_threshold": K_ANON_THRESHOLD,
             "suppressed_regions": suppressed,
         }
+
     return _cached(f"public:{data_dir}", build)
 
 
 def get_export_dataset(data_dir: Path) -> dict:
     """Bundesland k-anon scientific export (legacy format)."""
+
     def build():
         records = _load_records(data_dir)
-        n       = len(records)
+        n = len(records)
         regions = _region_groups(records)
 
         regional: dict[str, Any] = {}
-        suppressed: list[str]    = []
+        suppressed: list[str] = []
         for region, recs in sorted(regions.items()):
             if region in ("__ka__", "__skipped__", "None"):
                 continue
             if len(recs) >= K_ANON_THRESHOLD:
                 regional[region] = {
-                    "n":         len(recs),
+                    "n": len(recs),
                     "questions": _agg_records(recs, skip=SKIP_IN_EXPORT | {REGION_QUESTION}),
                 }
             else:
@@ -259,11 +269,11 @@ def get_export_dataset(data_dir: Path) -> dict:
 
         return {
             "meta": {
-                "total_submissions":     n,
+                "total_submissions": n,
                 "k_anonymity_threshold": K_ANON_THRESHOLD,
                 "geographic_resolution": "Bundesland",
-                "excluded_questions":    sorted(SKIP_IN_EXPORT),
-                "suppressed_regions":    suppressed,
+                "excluded_questions": sorted(SKIP_IN_EXPORT),
+                "suppressed_regions": suppressed,
                 "notes": [
                     "Free-text answers (Q052, Q064) and postal codes (Q121) are excluded.",
                     f"Regional data only for regions with >= {K_ANON_THRESHOLD} submissions.",
@@ -271,18 +281,20 @@ def get_export_dataset(data_dir: Path) -> dict:
                 ],
             },
             "national": {
-                "n":        n,
+                "n": n,
                 "by_month": _monthly_counts(records),
-                "by_lang":  _lang_counts(records),
+                "by_lang": _lang_counts(records),
                 "questions": _agg_records(records, skip=SKIP_IN_EXPORT),
             },
             "regional": regional,
         }
+
     return _cached(f"export:{data_dir}", build)
 
 
 def get_plz_stats(data_dir: Path) -> dict:
     """PLZ k-anonymous bundles with full question aggregates per bundle (cached)."""
+
     def build():
         records = _load_records(data_dir)
         bundles = _bundle_by_plz(records)
@@ -300,30 +312,31 @@ def get_plz_stats(data_dir: Path) -> dict:
         )
 
         return {
-            "total":            len(records),
-            "plz_records":      plz_records,
-            "no_plz_records":   len(records) - plz_records,
+            "total": len(records),
+            "plz_records": plz_records,
+            "no_plz_records": len(records) - plz_records,
             "k_anon_threshold": K_ANON_THRESHOLD,
-            "bundle_count":     len(bundles),
-            "by_resolution":    dict(by_res),
-            "bundles":          bundles,
+            "bundle_count": len(bundles),
+            "by_resolution": dict(by_res),
+            "bundles": bundles,
         }
+
     return _cached(f"plz:{data_dir}", build)
 
 
 def get_plz_export(data_dir: Path) -> dict:
     """PLZ k-anon scientific export — finest geographic resolution possible."""
-    stats   = get_plz_stats(data_dir)
+    stats = get_plz_stats(data_dir)
     bundles = stats["bundles"]
 
     return {
         "meta": {
-            "total_submissions":     stats["total"],
+            "total_submissions": stats["total"],
             "k_anonymity_threshold": K_ANON_THRESHOLD,
             "geographic_resolution": "PLZ iterative bundling (5→4→3→2→1 digit prefix)",
-            "excluded_questions":    sorted(SKIP_IN_EXPORT),
-            "bundle_count":          stats["bundle_count"],
-            "by_resolution":         stats["by_resolution"],
+            "excluded_questions": sorted(SKIP_IN_EXPORT),
+            "bundle_count": stats["bundle_count"],
+            "by_resolution": stats["by_resolution"],
             "notes": [
                 "Free-text answers (Q052, Q064) and postal codes (Q121) are excluded.",
                 f"Each geographic group contains >= {K_ANON_THRESHOLD} submissions.",
@@ -333,9 +346,7 @@ def get_plz_export(data_dir: Path) -> dict:
             ],
         },
         "geographic_groups": [
-            {k: v for k, v in b.items() if k != "questions"}
-            | {"questions": b["questions"]}
-            for b in bundles
+            {k: v for k, v in b.items() if k != "questions"} | {"questions": b["questions"]} for b in bundles
         ],
     }
 

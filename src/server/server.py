@@ -40,28 +40,24 @@ from starlette.responses import PlainTextResponse
 
 # ── Konfiguration ─────────────────────────────────────────────
 
-DATA_DIR        = Path(os.getenv("SURVEY_DATA_DIR",      "/var/data/survey")).resolve()
-MAX_BODY_BYTES  = int(os.getenv("SURVEY_MAX_BODY",        str(512 * 1024)))
-MAX_JSON_DEPTH  = int(os.getenv("SURVEY_MAX_DEPTH",       "12"))
-MAX_FILES       = int(os.getenv("SURVEY_MAX_FILES",       "50000"))
-MIN_FREE_MB     = int(os.getenv("SURVEY_MIN_FREE_MB",     "200"))
-RATE_LIMIT_REQ  = int(os.getenv("SURVEY_RATE_LIMIT_REQ",  "5"))
-RATE_LIMIT_WIN  = int(os.getenv("SURVEY_RATE_LIMIT_WIN",  "60"))
-ALLOWED_ORIGINS  = os.getenv("SURVEY_ALLOWED_ORIGINS",     "*").split(",")
-ADMIN_TOKEN      = os.getenv("ADMIN_TOKEN",                "")
-STATIC_DIR       = Path(os.getenv("STATIC_DIR", str(Path(__file__).parent))).resolve()
-SCHEMA_FILE      = Path(os.getenv("SCHEMA_FILE",
-                   str(Path(__file__).parent.parent / "survey" / "umfrage_struktur.json")))
-NEWSLETTER_FILE     = Path(os.getenv("NEWSLETTER_DATA_FILE",
-                      "/var/data/newsletter/subscribers.ndjson"))
-NEWSLETTER_PUB_KEY  = Path(os.getenv("NEWSLETTER_PUB_KEY",
-                      "/etc/survey/newsletter_pub.pem"))
+DATA_DIR = Path(os.getenv("SURVEY_DATA_DIR", "/var/data/survey")).resolve()
+MAX_BODY_BYTES = int(os.getenv("SURVEY_MAX_BODY", str(512 * 1024)))
+MAX_JSON_DEPTH = int(os.getenv("SURVEY_MAX_DEPTH", "12"))
+MAX_FILES = int(os.getenv("SURVEY_MAX_FILES", "50000"))
+MIN_FREE_MB = int(os.getenv("SURVEY_MIN_FREE_MB", "200"))
+RATE_LIMIT_REQ = int(os.getenv("SURVEY_RATE_LIMIT_REQ", "5"))
+RATE_LIMIT_WIN = int(os.getenv("SURVEY_RATE_LIMIT_WIN", "60"))
+ALLOWED_ORIGINS = os.getenv("SURVEY_ALLOWED_ORIGINS", "*").split(",")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+STATIC_DIR = Path(os.getenv("STATIC_DIR", str(Path(__file__).parent))).resolve()
+SCHEMA_FILE = Path(os.getenv("SCHEMA_FILE", str(Path(__file__).parent.parent / "survey" / "umfrage_struktur.json")))
+NEWSLETTER_FILE = Path(os.getenv("NEWSLETTER_DATA_FILE", "/var/data/newsletter/subscribers.ndjson"))
+NEWSLETTER_PUB_KEY = Path(os.getenv("NEWSLETTER_PUB_KEY", "/etc/survey/newsletter_pub.pem"))
 # Friendly Captcha v2 — set both vars to enable; leave empty to disable (dev mode)
-CAPTCHA_API_KEY  = os.getenv("FRIENDLYCAPTCHA_API_KEY",  "")
-CAPTCHA_SITEKEY  = os.getenv("FRIENDLYCAPTCHA_SITEKEY",  "")
+CAPTCHA_API_KEY = os.getenv("FRIENDLYCAPTCHA_API_KEY", "")
+CAPTCHA_SITEKEY = os.getenv("FRIENDLYCAPTCHA_SITEKEY", "")
 # Use the EU endpoint if your data must stay in the EU, otherwise global
-CAPTCHA_ENDPOINT = os.getenv("FRIENDLYCAPTCHA_ENDPOINT",
-                   "https://global.frcapi.com/api/v2/captcha/siteverify")
+CAPTCHA_ENDPOINT = os.getenv("FRIENDLYCAPTCHA_ENDPOINT", "https://global.frcapi.com/api/v2/captcha/siteverify")
 # Tailscale CGNAT range; must match Apache's "Require ip 100.64.0.0/10"
 _TAILSCALE_NET = ipaddress.ip_network("100.64.0.0/10")
 
@@ -71,52 +67,26 @@ log = logging.getLogger("umfrage")
 
 # ── Prometheus metrics ────────────────────────────────────────
 
-_survey_submissions = Counter(
-    "survey_submissions_total", "Accepted survey submissions", ["month", "lang"]
-)
-_survey_duplicates = Counter(
-    "survey_duplicates_total", "Duplicate submission attempts"
-)
-_survey_schema_mismatches = Counter(
-    "survey_schema_mismatches_total", "Schema hash mismatches from clients"
-)
-_survey_validation_errors = Counter(
-    "survey_validation_errors_total", "Payload validation rejections"
-)
-_captcha_failures = Counter(
-    "captcha_failures_total", "Captcha verification failures"
-)
-_captcha_network_errors = Counter(
-    "captcha_network_errors_total", "Captcha API network/timeout errors"
-)
-_rate_limit_hits = Counter(
-    "rate_limit_hits_total", "Rate limit rejections", ["endpoint"]
-)
-_newsletter_signups = Counter(
-    "newsletter_signups_total", "Newsletter signups", ["lang"]
-)
-_newsletter_access_events = Counter(
-    "newsletter_access_total", "Newsletter subscriber list access audit events"
-)
-_http_requests = Counter(
-    "http_requests_total", "HTTP requests processed", ["method", "endpoint", "status"]
-)
+_survey_submissions = Counter("survey_submissions_total", "Accepted survey submissions", ["month", "lang"])
+_survey_duplicates = Counter("survey_duplicates_total", "Duplicate submission attempts")
+_survey_schema_mismatches = Counter("survey_schema_mismatches_total", "Schema hash mismatches from clients")
+_survey_validation_errors = Counter("survey_validation_errors_total", "Payload validation rejections")
+_captcha_failures = Counter("captcha_failures_total", "Captcha verification failures")
+_captcha_network_errors = Counter("captcha_network_errors_total", "Captcha API network/timeout errors")
+_rate_limit_hits = Counter("rate_limit_hits_total", "Rate limit rejections", ["endpoint"])
+_newsletter_signups = Counter("newsletter_signups_total", "Newsletter signups", ["lang"])
+_newsletter_access_events = Counter("newsletter_access_total", "Newsletter subscriber list access audit events")
+_http_requests = Counter("http_requests_total", "HTTP requests processed", ["method", "endpoint", "status"])
 _http_duration = Histogram(
-    "http_request_duration_seconds", "HTTP request latency", ["endpoint"],
+    "http_request_duration_seconds",
+    "HTTP request latency",
+    ["endpoint"],
     buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
 )
-_gauge_submissions = Gauge(
-    "survey_total_submissions", "Total survey files on disk"
-)
-_gauge_disk_free = Gauge(
-    "survey_disk_free_bytes", "Free disk space in bytes"
-)
-_gauge_disk_used = Gauge(
-    "survey_disk_used_bytes", "Used disk space in bytes"
-)
-_gauge_newsletter = Gauge(
-    "newsletter_subscriber_count", "Newsletter subscriber count"
-)
+_gauge_submissions = Gauge("survey_total_submissions", "Total survey files on disk")
+_gauge_disk_free = Gauge("survey_disk_free_bytes", "Free disk space in bytes")
+_gauge_disk_used = Gauge("survey_disk_used_bytes", "Used disk space in bytes")
+_gauge_newsletter = Gauge("newsletter_subscriber_count", "Newsletter subscriber count")
 
 
 def _normalize_endpoint(path: str) -> str:
@@ -149,8 +119,10 @@ def _update_live_gauges() -> None:
 if not CAPTCHA_API_KEY:
     log.warning("FRIENDLYCAPTCHA_API_KEY not set – captcha verification disabled (dev mode)")
 elif not CAPTCHA_SITEKEY:
-    log.error("FRIENDLYCAPTCHA_API_KEY is set but FRIENDLYCAPTCHA_SITEKEY is empty – "
-              "every captcha verification will fail (sitekey mismatch)")
+    log.error(
+        "FRIENDLYCAPTCHA_API_KEY is set but FRIENDLYCAPTCHA_SITEKEY is empty – "
+        "every captcha verification will fail (sitekey mismatch)"
+    )
 
 try:
     import aggregator as _aggregator
@@ -167,6 +139,7 @@ except ImportError:
 # The frontend must include the Friendly Captcha widget and submit the
 # solved token in the JSON body under the key "frc-captcha-response".
 
+
 def _verify_captcha(token: str | None, ip: str) -> None:
     """Raise HTTPException(400) if the captcha token is missing or invalid."""
     if not CAPTCHA_API_KEY:
@@ -182,8 +155,8 @@ def _verify_captcha(token: str | None, ip: str) -> None:
         data=payload,
         headers={
             "Content-Type": "application/json",
-            "Accept":       "application/json",
-            "X-Api-Key":    CAPTCHA_API_KEY,
+            "Accept": "application/json",
+            "X-Api-Key": CAPTCHA_API_KEY,
         },
         method="POST",
     )
@@ -196,8 +169,7 @@ def _verify_captcha(token: str | None, ip: str) -> None:
             result = json.loads(body)
         except Exception:
             result = {}
-        log.warning("captcha-api-error  ip=%s  status=%s  body=%s",
-                    ip, exc.code, body[:200])
+        log.warning("captcha-api-error  ip=%s  status=%s  body=%s", ip, exc.code, body[:200])
     except Exception as exc:
         # Network failure — fail open so the server stays usable if FriendlyCaptcha
         # has an outage. Change to fail closed by raising HTTPException here if
@@ -212,33 +184,194 @@ def _verify_captcha(token: str | None, ip: str) -> None:
         _captcha_failures.inc()
         raise HTTPException(400, "Captcha-Lösung ungültig – bitte erneut versuchen")
 
+
 # ── [F] Kanonisches Schema ─────────────────────────────────────
 #
 # Alle gültigen Fragen-IDs. Muss mit dem Frontend synchron gehalten werden.
 # Wenn Fragen hinzugefügt/entfernt werden: neuen Hash generieren mit
 #   python3 -c "import hashlib,json; ids=sorted([...]); print(hashlib.sha256(json.dumps(ids,separators=(',',':')).encode()).hexdigest())"
 
-VALID_QUESTION_IDS: frozenset[str] = frozenset([
-    "Q001","Q002","Q003","Q004","Q005","Q006","Q007","Q008","Q009","Q010",
-    "Q011","Q012","Q013","Q014","Q015","Q016","Q017","Q018","Q019","Q020",
-    "Q021","Q022","Q023","Q024","Q025","Q026","Q027","Q028","Q029","Q030",
-    "Q031","Q032","Q033","Q034","Q035","Q036","Q037","Q038","Q039","Q040",
-    "Q041","Q042","Q043","Q044","Q045","Q046","Q047","Q048","Q049","Q050",
-    "Q051","Q052","Q053","Q054","Q055","Q056","Q057","Q058","Q059","Q060",
-    "Q061","Q062","Q063","Q064","Q065","Q066","Q067","Q068","Q069","Q070",
-    "Q071","Q072","Q073","Q074","Q075","Q076","Q077","Q078","Q079","Q080",
-    "Q081","Q082","Q083","Q084","Q085","Q086","Q087","Q088","Q089","Q090",
-    "Q091","Q092","Q093","Q094","Q095","Q096","Q097","Q098","Q099","Q100",
-    "Q101","Q102","Q103","Q104","Q105","Q106","Q107","Q108","Q109","Q110",
-    "Q111","Q112","Q113","Q114","Q115","Q116","Q117","Q118","Q119","Q120",
-    "Q121","Q122","Q123","Q124","Q125","Q126","Q127","Q128","Q129","Q130",
-    "Q131","Q132","Q133","Q134","Q135","Q136","Q137","Q138","Q139","Q140",
-    "Q141","Q142","Q143","Q144","Q145","Q146","Q147","Q148","Q149","Q150",
-    "Q151","Q152","Q153","Q154","Q155","Q156","Q157",
-    "Q158","Q159","Q160","Q161","Q162","Q163",
-    "Q164","Q165","Q166","Q167","Q168","Q169","Q170","Q171","Q172",
-    "Q173","Q174","Q175","Q176","Q177",
-])
+VALID_QUESTION_IDS: frozenset[str] = frozenset(
+    [
+        "Q001",
+        "Q002",
+        "Q003",
+        "Q004",
+        "Q005",
+        "Q006",
+        "Q007",
+        "Q008",
+        "Q009",
+        "Q010",
+        "Q011",
+        "Q012",
+        "Q013",
+        "Q014",
+        "Q015",
+        "Q016",
+        "Q017",
+        "Q018",
+        "Q019",
+        "Q020",
+        "Q021",
+        "Q022",
+        "Q023",
+        "Q024",
+        "Q025",
+        "Q026",
+        "Q027",
+        "Q028",
+        "Q029",
+        "Q030",
+        "Q031",
+        "Q032",
+        "Q033",
+        "Q034",
+        "Q035",
+        "Q036",
+        "Q037",
+        "Q038",
+        "Q039",
+        "Q040",
+        "Q041",
+        "Q042",
+        "Q043",
+        "Q044",
+        "Q045",
+        "Q046",
+        "Q047",
+        "Q048",
+        "Q049",
+        "Q050",
+        "Q051",
+        "Q052",
+        "Q053",
+        "Q054",
+        "Q055",
+        "Q056",
+        "Q057",
+        "Q058",
+        "Q059",
+        "Q060",
+        "Q061",
+        "Q062",
+        "Q063",
+        "Q064",
+        "Q065",
+        "Q066",
+        "Q067",
+        "Q068",
+        "Q069",
+        "Q070",
+        "Q071",
+        "Q072",
+        "Q073",
+        "Q074",
+        "Q075",
+        "Q076",
+        "Q077",
+        "Q078",
+        "Q079",
+        "Q080",
+        "Q081",
+        "Q082",
+        "Q083",
+        "Q084",
+        "Q085",
+        "Q086",
+        "Q087",
+        "Q088",
+        "Q089",
+        "Q090",
+        "Q091",
+        "Q092",
+        "Q093",
+        "Q094",
+        "Q095",
+        "Q096",
+        "Q097",
+        "Q098",
+        "Q099",
+        "Q100",
+        "Q101",
+        "Q102",
+        "Q103",
+        "Q104",
+        "Q105",
+        "Q106",
+        "Q107",
+        "Q108",
+        "Q109",
+        "Q110",
+        "Q111",
+        "Q112",
+        "Q113",
+        "Q114",
+        "Q115",
+        "Q116",
+        "Q117",
+        "Q118",
+        "Q119",
+        "Q120",
+        "Q121",
+        "Q122",
+        "Q123",
+        "Q124",
+        "Q125",
+        "Q126",
+        "Q127",
+        "Q128",
+        "Q129",
+        "Q130",
+        "Q131",
+        "Q132",
+        "Q133",
+        "Q134",
+        "Q135",
+        "Q136",
+        "Q137",
+        "Q138",
+        "Q139",
+        "Q140",
+        "Q141",
+        "Q142",
+        "Q143",
+        "Q144",
+        "Q145",
+        "Q146",
+        "Q147",
+        "Q148",
+        "Q149",
+        "Q150",
+        "Q151",
+        "Q152",
+        "Q153",
+        "Q154",
+        "Q155",
+        "Q156",
+        "Q157",
+        "Q158",
+        "Q159",
+        "Q160",
+        "Q161",
+        "Q162",
+        "Q163",
+        "Q164",
+        "Q165",
+        "Q166",
+        "Q167",
+        "Q168",
+        "Q169",
+        "Q170",
+        "Q171",
+        "Q172",
+        "Q173",
+        "Q174",
+        "Q175",
+        "Q176",
+        "Q177",
+    ]
+)
 
 # Kanonischer Hash = SHA-256 über sortierte IDs als kompaktes JSON-Array.
 # Wird beim Serverstart einmalig berechnet.
@@ -252,28 +385,179 @@ log.info("Schema-Hash: %s  (%d Fragen)", SCHEMA_HASH[:16] + "…", len(VALID_QUE
 # "int0-10" = SOEP, "int" = freie Zahl, "str" = Freitext/Radio/Party,
 # "list" = Mehrfachauswahl
 QUESTION_TYPES: dict[str, str] = {
-    **{f"Q{i:03d}": "int"     for i in [1, 14, 113]},
-    **{f"Q{i:03d}": "int1-5"  for i in [25,26,27,31,32,33,34,35,36,39,50,51,53,54,
-                                          55,56,57,58,59,60,61,62,65,68,69,70,71,73,
-                                          76,77,78,79,80,81,82,83,84,85,86,87,88,
-                                          89,90,91,95,106,115,116,117,118,119,120,123,125,126,130,
-                                          132,134,135,137,138,141,150,152,153,154,155,156,157,
-                                          158,159,160,161,162,163,
-                                          173,174,175,176,177,]},
-    **{f"Q{i:03d}": "int1-7"  for i in [29, 30, 66, 133]},
+    **{f"Q{i:03d}": "int" for i in [1, 14, 113]},
+    **{
+        f"Q{i:03d}": "int1-5"
+        for i in [
+            25,
+            26,
+            27,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            39,
+            50,
+            51,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            65,
+            68,
+            69,
+            70,
+            71,
+            73,
+            76,
+            77,
+            78,
+            79,
+            80,
+            81,
+            82,
+            83,
+            84,
+            85,
+            86,
+            87,
+            88,
+            89,
+            90,
+            91,
+            95,
+            106,
+            115,
+            116,
+            117,
+            118,
+            119,
+            120,
+            123,
+            125,
+            126,
+            130,
+            132,
+            134,
+            135,
+            137,
+            138,
+            141,
+            150,
+            152,
+            153,
+            154,
+            155,
+            156,
+            157,
+            158,
+            159,
+            160,
+            161,
+            162,
+            163,
+            173,
+            174,
+            175,
+            176,
+            177,
+        ]
+    },
+    **{f"Q{i:03d}": "int1-7" for i in [29, 30, 66, 133]},
     **{f"Q{i:03d}": "int0-10" for i in [104]},
     # list = Mehrfachauswahl
-    **{f"Q{i:03d}": "list"    for i in [10, 15, 22, 40, 63, 67, 92, 108, 136, 140, 146, 147, 148, 164, 171]},
-    **{f"Q{i:03d}": "str"     for i in [2,3,4,5,6,7,8,9,11,12,13,16,17,18,19,20,
-                                          21,23,24,28,37,38,41,42,43,44,45,46,47,48,49,
-                                          52,64,72,74,75,93,94,96,97,98,99,100,101,102,103,
-                                          105,107,109,110,111,112,114,121,122,124,127,128,129,
-                                          131,139,142,143,144,145,149,151,
-                                          165,166,167,168,169,170,172,]},
+    **{f"Q{i:03d}": "list" for i in [10, 15, 22, 40, 63, 67, 92, 108, 136, 140, 146, 147, 148, 164, 171]},
+    **{
+        f"Q{i:03d}": "str"
+        for i in [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            11,
+            12,
+            13,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            23,
+            24,
+            28,
+            37,
+            38,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            52,
+            64,
+            72,
+            74,
+            75,
+            93,
+            94,
+            96,
+            97,
+            98,
+            99,
+            100,
+            101,
+            102,
+            103,
+            105,
+            107,
+            109,
+            110,
+            111,
+            112,
+            114,
+            121,
+            122,
+            124,
+            127,
+            128,
+            129,
+            131,
+            139,
+            142,
+            143,
+            144,
+            145,
+            149,
+            151,
+            165,
+            166,
+            167,
+            168,
+            169,
+            170,
+            172,
+        ]
+    },
 }
 
 KA_VALUE = "__ka__"
-MAX_STR_LEN = 2000   # Freitext-Felder
+MAX_STR_LEN = 2000  # Freitext-Felder
 
 
 def validate_responses(responses: dict) -> list[str]:
@@ -348,13 +632,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response as StarletteResponse
 
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: StarletteRequest, call_next) -> StarletteResponse:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"]        = "DENY"
-        response.headers["Referrer-Policy"]        = "no-referrer"
-        response.headers["Permissions-Policy"]     = "interest-cohort=()"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "interest-cohort=()"
         return response
 
 
@@ -366,14 +651,10 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             status = str(response.status_code)
         except Exception:
-            _http_requests.labels(
-                method=request.method, endpoint=endpoint, status="500"
-            ).inc()
+            _http_requests.labels(method=request.method, endpoint=endpoint, status="500").inc()
             _http_duration.labels(endpoint=endpoint).observe(time.perf_counter() - start)
             raise
-        _http_requests.labels(
-            method=request.method, endpoint=endpoint, status=status
-        ).inc()
+        _http_requests.labels(method=request.method, endpoint=endpoint, status=status).inc()
         _http_duration.labels(endpoint=endpoint).observe(time.perf_counter() - start)
         return response
 
@@ -390,32 +671,38 @@ app.add_middleware(MetricsMiddleware)
 #   - Vergangene Monate per `chattr +a <monat-dir>` immutable setzbar
 #   - `ls /var/data/survey/2025-04/ | wc -l` gibt April-Einreichungen
 
+
 def get_month_dir(dt: datetime) -> Path:
     """Gibt das Monatsverzeichnis zurück und erstellt es bei Bedarf."""
     month_dir = DATA_DIR / dt.strftime("%Y-%m")
     month_dir.mkdir(exist_ok=True)
     return month_dir
 
+
 # ── Dateianzahl-Cache (rekursiv über alle Monatsordner) ───────
 
-_file_count      = sum(1 for _ in DATA_DIR.rglob("*.json"))
+_file_count = sum(1 for _ in DATA_DIR.rglob("*.json"))
 _file_count_lock = Lock()
+
 
 def increment_file_count() -> None:
     global _file_count
     with _file_count_lock:
         _file_count += 1
 
+
 def get_file_count() -> int:
     with _file_count_lock:
         return _file_count
 
+
 # ── Rate Limiter ──────────────────────────────────────────────
 
 _rate: dict[str, list[float]] = defaultdict(list)
-_rate_lock     = Lock()
-_last_cleanup  = 0.0
-CLEANUP_INT    = 300.0
+_rate_lock = Lock()
+_last_cleanup = 0.0
+CLEANUP_INT = 300.0
+
 
 def _cleanup(now: float) -> None:
     global _last_cleanup
@@ -426,6 +713,7 @@ def _cleanup(now: float) -> None:
     for ip in dead:
         del _rate[ip]
     _last_cleanup = now
+
 
 def is_rate_limited(ip: str) -> bool:
     now = time.monotonic()
@@ -440,13 +728,17 @@ def is_rate_limited(ip: str) -> bool:
         _rate[ip] = recent
         return False
 
+
 # ── Hilfsfunktionen ───────────────────────────────────────────
+
 
 def get_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
+
 def sanitize_id(raw: str) -> str:
     return "".join(c for c in raw if c.isascii() and c.isalnum())[:64]
+
 
 def check_depth(obj, depth: int = 0) -> None:
     if depth > MAX_JSON_DEPTH:
@@ -458,6 +750,7 @@ def check_depth(obj, depth: int = 0) -> None:
         for item in obj:
             check_depth(item, depth + 1)
 
+
 def guard_resources() -> None:
     usage = shutil.disk_usage(DATA_DIR)
     if usage.free < MIN_FREE_MB * 1_048_576:
@@ -465,7 +758,9 @@ def guard_resources() -> None:
     if get_file_count() >= MAX_FILES:
         raise HTTPException(503, "Dienst vorübergehend nicht verfügbar")
 
+
 # ── Endpoint ──────────────────────────────────────────────────
+
 
 @app.post("/api/survey")
 async def receive_survey(request: Request) -> JSONResponse:
@@ -530,8 +825,16 @@ async def receive_survey(request: Request) -> JSONResponse:
 
     # Whitelist top-level fields — reject payloads with unknown keys
     known_fields = {
-        "id", "schema_hash", "responses", "lang", "frc-captcha-response",
-        "submitted_at", "version", "answered", "total", "duration_seconds",
+        "id",
+        "schema_hash",
+        "responses",
+        "lang",
+        "frc-captcha-response",
+        "submitted_at",
+        "version",
+        "answered",
+        "total",
+        "duration_seconds",
     }
     unknown_fields = set(body.keys()) - known_fields
     if unknown_fields:
@@ -547,8 +850,8 @@ async def receive_survey(request: Request) -> JSONResponse:
 
     # Zeitstempel einmalig festlegen
     now_utc = datetime.now(timezone.utc)
-    ts_file = now_utc.strftime("%Y%m%dT%H%M%SZ")   # 20250420T143201Z  → sortierbar
-    ts_iso  = now_utc.isoformat()
+    ts_file = now_utc.strftime("%Y%m%dT%H%M%SZ")  # 20250420T143201Z  → sortierbar
+    ts_iso = now_utc.isoformat()
 
     # Monatsverzeichnis: DATA_DIR/YYYY-MM/
     month_dir = get_month_dir(now_utc)
@@ -569,13 +872,12 @@ async def receive_survey(request: Request) -> JSONResponse:
     # Only store whitelisted, validated fields
     duration_raw = body.get("duration_seconds")
     stored = {
-        "id":           safe_id,
-        "lang":         safe_lang,
-        "responses":    responses,
+        "id": safe_id,
+        "lang": safe_lang,
+        "responses": responses,
         "_received_at": ts_iso,
-        "_month":       now_utc.strftime("%Y-%m"),
-        **({"duration_seconds": duration_raw}
-           if isinstance(duration_raw, int) and 0 <= duration_raw <= 86400 else {}),
+        "_month": now_utc.strftime("%Y-%m"),
+        **({"duration_seconds": duration_raw} if isinstance(duration_raw, int) and 0 <= duration_raw <= 86400 else {}),
     }
 
     try:
@@ -602,17 +904,20 @@ async def health(request: Request) -> JSONResponse:
         for d in sorted(DATA_DIR.iterdir())
         if d.is_dir() and len(d.name) == 7  # YYYY-MM
     }
-    return JSONResponse({
-        "status":       "ok",
-        "submissions":  get_file_count(),
-        "by_month":     months,
-        "disk_free_mb": usage.free  // 1_048_576,
-        "disk_used_mb": usage.used  // 1_048_576,
-        "schema_hash":  SCHEMA_HASH,
-    })
+    return JSONResponse(
+        {
+            "status": "ok",
+            "submissions": get_file_count(),
+            "by_month": months,
+            "disk_free_mb": usage.free // 1_048_576,
+            "disk_used_mb": usage.used // 1_048_576,
+            "schema_hash": SCHEMA_HASH,
+        }
+    )
 
 
 # ── Admin helpers ─────────────────────────────────────────────
+
 
 def _is_local(ip: str) -> bool:
     """True for localhost and Tailscale IPs within 100.64.0.0/10."""
@@ -623,12 +928,14 @@ def _is_local(ip: str) -> bool:
     except ValueError:
         return False
 
+
 def _verify_admin(token: str) -> None:
     if not ADMIN_TOKEN:
         raise HTTPException(503, "Admin nicht konfiguriert (ADMIN_TOKEN nicht gesetzt)")
     if not hmac.compare_digest(token or "", ADMIN_TOKEN):
         log.warning("admin-auth-failure  token_prefix=%s", (token or "")[:4])
         raise HTTPException(401, "Ungültiger Admin-Token")
+
 
 def _newsletter_count() -> int:
     try:
@@ -643,6 +950,7 @@ def _load_newsletter_pubkey():
         return None
     try:
         from cryptography.hazmat.primitives import serialization
+
         return serialization.load_pem_public_key(NEWSLETTER_PUB_KEY.read_bytes())
     except Exception as exc:
         log.error("newsletter pubkey load failed: %s", exc)
@@ -657,10 +965,10 @@ def _encrypt_newsletter_entry(pubkey, payload: dict) -> dict:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     aes_key = _os.urandom(32)
-    nonce   = _os.urandom(12)
-    aesgcm  = AESGCM(aes_key)
+    nonce = _os.urandom(12)
+    aesgcm = AESGCM(aes_key)
     plaintext = json.dumps(payload, ensure_ascii=False).encode()
-    ciphered  = aesgcm.encrypt(nonce, plaintext, None)
+    ciphered = aesgcm.encrypt(nonce, plaintext, None)
 
     enc_key = pubkey.encrypt(
         aes_key,
@@ -672,13 +980,14 @@ def _encrypt_newsletter_entry(pubkey, payload: dict) -> dict:
     )
     return {
         "encrypted": True,
-        "enc_key":   b64encode(enc_key).decode(),
-        "nonce":     b64encode(nonce).decode(),
-        "enc_data":  b64encode(ciphered).decode(),
+        "enc_key": b64encode(enc_key).decode(),
+        "nonce": b64encode(nonce).decode(),
+        "enc_data": b64encode(ciphered).decode(),
     }
 
 
 # ── Admin endpoints ───────────────────────────────────────────
+
 
 @app.get("/admin")
 @app.get("/admin/")
@@ -751,10 +1060,7 @@ async def admin_plz_stats(
     data = _aggregator.get_plz_stats(DATA_DIR)
     # Strip heavy question data from summary response; client fetches export separately
     summary = {k: v for k, v in data.items() if k != "bundles"}
-    summary["bundles"] = [
-        {k: v for k, v in b.items() if k != "questions"}
-        for b in data["bundles"]
-    ]
+    summary["bundles"] = [{k: v for k, v in b.items() if k != "questions"} for b in data["bundles"]]
     return JSONResponse(summary)
 
 
@@ -819,8 +1125,7 @@ async def admin_put_schema(
     except PermissionError:
         raise HTTPException(
             403,
-            f"Keine Schreibrechte auf {SCHEMA_FILE}. "
-            "ReadWritePaths in der systemd-Unit anpassen.",
+            f"Keine Schreibrechte auf {SCHEMA_FILE}. ReadWritePaths in der systemd-Unit anpassen.",
         )
     except Exception as exc:
         raise HTTPException(500, f"Speichern fehlgeschlagen: {exc}")
@@ -889,10 +1194,10 @@ async def newsletter_signup(request: Request) -> JSONResponse:
     # consent_at is always server-generated — never trust the client's clock
     # for GDPR audit trail purposes
     consent_at = now_utc.isoformat()
-    stored_at  = consent_at
+    stored_at = consent_at
 
     payload = {"email": email, "lang": safe_lang, "consent_at": consent_at}
-    entry   = _encrypt_newsletter_entry(pubkey, payload)
+    entry = _encrypt_newsletter_entry(pubkey, payload)
     entry["_stored_at"] = stored_at
 
     NEWSLETTER_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -914,6 +1219,7 @@ async def newsletter_signup(request: Request) -> JSONResponse:
 
 # ── Public results endpoints ──────────────────────────────────
 
+
 @app.get("/results")
 @app.get("/results/")
 async def results_page() -> FileResponse:
@@ -933,6 +1239,7 @@ async def results_stats(request: Request) -> JSONResponse:
 
 
 # ── Prometheus metrics endpoint ───────────────────────────────
+
 
 @app.get("/admin/metrics")
 async def admin_metrics(request: Request) -> PlainTextResponse:
@@ -972,10 +1279,10 @@ async def admin_newsletter_access(
     count = _newsletter_count()
     now_utc = datetime.now(timezone.utc)
     entry = {
-        "accessed_at":      now_utc.isoformat(),
-        "ip":               ip,
+        "accessed_at": now_utc.isoformat(),
+        "ip": ip,
         "subscriber_count": count,
-        "note":             note,
+        "note": note,
     }
 
     _AUDIT_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -990,8 +1297,10 @@ async def admin_newsletter_access(
 
     _newsletter_access_events.inc()
     log.info("newsletter-access  ip=%s  count=%d  note=%r", ip, count, note)
-    return JSONResponse({
-        "status":           "ok",
-        "subscriber_count": count,
-        "accessed_at":      entry["accessed_at"],
-    })
+    return JSONResponse(
+        {
+            "status": "ok",
+            "subscriber_count": count,
+            "accessed_at": entry["accessed_at"],
+        }
+    )
