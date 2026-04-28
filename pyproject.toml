@@ -1,0 +1,10 @@
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E402",  # module-level import not at top (server.py has deferred imports after init code)
+    "E501",  # line too long (managed via line-length setting)
+    "E741",  # ambiguous variable name
+]
