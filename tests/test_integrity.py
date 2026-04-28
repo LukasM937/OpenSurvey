@@ -19,6 +19,7 @@ ROOT = Path(__file__).parent.parent
 STRUCTURE_JSON = ROOT / "src" / "survey" / "umfrage_struktur.json"
 SERVER_PY = ROOT / "src" / "server" / "server.py"
 JSX_FILE = ROOT / "src" / "survey" / "umfrage.jsx"
+I18N_DIR = ROOT / "src" / "survey" / "i18n"
 
 # Mapping from JSON question type → QUESTION_TYPES value expected in server.py
 JSON_TO_SERVER_TYPE = {
@@ -146,39 +147,41 @@ def extract_jsx_schema_hash() -> str:
 def extract_language_translation_keys() -> dict:
     """
     Returns {lang_code: set_of_keys | None} for every entry in LANGUAGES.
-    None means the translation is explicitly null (falls back to German at runtime).
+    None means ui is explicitly null (falls back to German at runtime).
+
+    Reads from src/survey/i18n/<lang>.js files.
+    Each file exports a default with an `ui` field that is either null or an object.
     """
     src = JSX_FILE.read_text(encoding="utf-8")
 
     langs_block = re.search(r"const LANGUAGES\s*=\s*\[(.+?)\]", src, re.DOTALL)
     assert langs_block, "LANGUAGES array not found in umfrage.jsx"
-    all_langs = re.findall(r'"code"\s*:\s*"(\w+)"', langs_block.group(1))
-
-    null_langs = set(re.findall(r"\b(\w{2,3})\s*:\s*null\b", src))
+    all_langs = re.findall(r'\bcode\s*:\s*"(\w+)"', langs_block.group(1))
 
     result = {}
     for lang in all_langs:
-        if lang in null_langs:
+        lang_file = I18N_DIR / f"{lang}.js"
+        assert lang_file.exists(), f"Missing i18n file: {lang_file}"
+        content = lang_file.read_text(encoding="utf-8")
+
+        if re.search(r"\bui\s*:\s*null\b", content):
             result[lang] = None
             continue
 
-        m = re.search(rf"(?m)^\s+{re.escape(lang)}\s*:\s*\{{", src)
-        if not m:
-            result[lang] = set()
-            continue
+        ui_match = re.search(r"\bui\s*:\s*\{", content)
+        assert ui_match, f"No 'ui:' block found in {lang_file}"
 
-        # Brace-count to find the matching closing brace
-        start = m.end()
+        start = ui_match.end()
         depth, pos = 1, start
-        while pos < len(src) and depth > 0:
-            ch = src[pos]
+        while pos < len(content) and depth > 0:
+            ch = content[pos]
             if ch == "{":
                 depth += 1
             elif ch == "}":
                 depth -= 1
             pos += 1
 
-        block = src[start : pos - 1]
+        block = content[start : pos - 1]
         keys = set(re.findall(r"^\s+(\w+)\s*:", block, re.MULTILINE))
         result[lang] = keys
 
@@ -415,3 +418,24 @@ def test_no_extra_translation_keys():
         if extra:
             failures.append(f"  lang='{lang}' has unexpected keys: {sorted(extra)}")
     assert not failures, "Translations with unexpected extra keys:\n" + "\n".join(failures)
+
+
+def test_i18n_files_exist_for_all_languages():
+    """Every language in LANGUAGES must have a corresponding i18n file."""
+    src = JSX_FILE.read_text(encoding="utf-8")
+    langs_block = re.search(r"const LANGUAGES\s*=\s*\[(.+?)\]", src, re.DOTALL)
+    assert langs_block, "LANGUAGES array not found in umfrage.jsx"
+    all_langs = re.findall(r'\bcode\s*:\s*"(\w+)"', langs_block.group(1))
+    missing = [lang for lang in all_langs if not (I18N_DIR / f"{lang}.js").exists()]
+    assert not missing, f"Missing i18n files for: {missing}"
+
+
+def test_no_orphaned_i18n_files():
+    """i18n directory must not contain files for languages absent from LANGUAGES."""
+    src = JSX_FILE.read_text(encoding="utf-8")
+    langs_block = re.search(r"const LANGUAGES\s*=\s*\[(.+?)\]", src, re.DOTALL)
+    assert langs_block, "LANGUAGES array not found in umfrage.jsx"
+    all_langs = set(re.findall(r'\bcode\s*:\s*"(\w+)"', langs_block.group(1)))
+    actual_files = {p.stem for p in I18N_DIR.glob("*.js")}
+    orphaned = actual_files - all_langs
+    assert not orphaned, f"Orphaned i18n files with no LANGUAGES entry: {orphaned}"
