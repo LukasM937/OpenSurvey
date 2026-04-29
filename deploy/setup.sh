@@ -473,6 +473,9 @@ step_frontend() {
   | sed "s|sitekey: \"FCMS9RCA6232KR7L\"|sitekey: \"${FRIENDLYCAPTCHA_SITEKEY:-FCMS9RCA6232KR7L}\"|g" \
     > "${BUILD_DIR}/src/App.jsx"
 
+  cp -r "${REPO_ROOT}/src/survey/i18n" \
+    "${BUILD_DIR}/src/i18n"
+
   # Override the Vite template index.css (its defaults set body {display:flex}
   # and a dark background-color, which left-aligns the survey and shows a dark
   # right margin on the page).
