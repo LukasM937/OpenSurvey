@@ -1068,7 +1068,9 @@ export default function App() {
           body: JSON.stringify({
             email:      newsletterEmail.trim().toLowerCase(),
             consent_at: new Date().toISOString(),
+            consent:    true,
             lang,
+            "frc-captcha-response": token,
             // Absichtlich kein survey_id – würde Anonymität brechen
           }),
         }).catch(() => {}); // Newsletter-Fehler soll Submit nicht blockieren
