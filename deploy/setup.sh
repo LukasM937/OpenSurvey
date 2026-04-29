@@ -473,6 +473,7 @@ step_frontend() {
   | sed "s|sitekey: \"FCMS9RCA6232KR7L\"|sitekey: \"${FRIENDLYCAPTCHA_SITEKEY:-FCMS9RCA6232KR7L}\"|g" \
     > "${BUILD_DIR}/src/App.jsx"
 
+  rm -rf "${BUILD_DIR}/src/i18n"
   cp -r "${REPO_ROOT}/src/survey/i18n" \
     "${BUILD_DIR}/src/i18n"
 
