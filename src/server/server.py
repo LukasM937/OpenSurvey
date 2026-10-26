@@ -1110,7 +1110,12 @@ async def admin_put_schema(
 
 # ── Newsletter signup ─────────────────────────────────────────
 
-_EMAIL_RE = re.compile(r"[^@\s]{1,64}@[^@\s]{1,255}\.[^@\s]{1,63}", re.ASCII)
+# Bewusst eng: beginnt mit Buchstabe/Ziffer (kein '=', '+', '-', '@' am Anfang -> keine
+# CSV-/Tabellen-Formeln im Export) und lässt keine Quotes, Klammern oder Leerzeichen zu.
+_EMAIL_RE = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._%+\-]{0,63}@(?:[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,24}",
+    re.ASCII,
+)
 _newsletter_lock = Lock()
 
 
@@ -1146,7 +1151,7 @@ async def newsletter_signup(request: Request) -> JSONResponse:
     await _verify_captcha(body.get("frc-captcha-response"), ip)
 
     email = body.get("email", "")
-    if not isinstance(email, str) or not _EMAIL_RE.fullmatch(email.strip()):
+    if not isinstance(email, str) or len(email.strip()) > 254 or not _EMAIL_RE.fullmatch(email.strip()):
         raise HTTPException(422, "Ungültige E-Mail-Adresse")
     email = email.strip().lower()
 
