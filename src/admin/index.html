@@ -443,6 +443,16 @@ const charts = {};
 
 // ── Helpers ────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
+// Output encoding for every interpolation of server-sourced strings (respondent answers,
+// schema texts/ids) into innerHTML. Truncate the RAW string first, then escape.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+// JS-string- and attribute-safe encoding for values inside inline onclick='...' handlers
+function jsq(s) {
+  return esc(String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+}
 function getToken()  { return sessionStorage.getItem('admin_token') || ''; }
 function setToken(t) { sessionStorage.setItem('admin_token', t); TOKEN = t; }
 
@@ -492,7 +502,7 @@ async function login() {
     $('login-err').textContent = '';
     STATS = data;
     $('login').style.display = 'none';
-    $('app').style.display = '';
+    $('app').style.display = 'block';
     renderOverview();
     loadSchema();
   } catch(e) {
@@ -568,7 +578,7 @@ function renderOverview() {
     const pct = Math.round(rate * 100);
     tbody.insertAdjacentHTML('beforeend',`
       <tr>
-        <td class="monospace">${qid}</td>
+        <td class="monospace">${esc(qid)}</td>
         <td>${pct}%</td>
         <td><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div></td>
       </tr>`);
@@ -609,8 +619,8 @@ function buildQuestionList() {
 function appendQItem(parent, qid, text) {
   const el = document.createElement('div');
   el.style.cssText = 'padding:.3rem .5rem;cursor:pointer;border-radius:4px;font-size:13px';
-  el.innerHTML = `<span class="monospace" style="color:var(--accent)">${qid}</span>
-    ${text ? `<span class="text-muted" style="font-size:11px;margin-left:.4rem">${text.slice(0,50)}${text.length>50?'…':''}</span>` : ''}`;
+  el.innerHTML = `<span class="monospace" style="color:var(--accent)">${esc(qid)}</span>
+    ${text ? `<span class="text-muted" style="font-size:11px;margin-left:.4rem">${esc(text.slice(0,50))}${text.length>50?'…':''}</span>` : ''}`;
   el.onclick = () => showQuestionDetail(qid);
   el.onmouseenter = () => el.style.background = 'var(--bg)';
   el.onmouseleave = () => el.style.background = '';
@@ -639,23 +649,23 @@ function showQuestionDetail(qid) {
   const compRate = STATS?.completion_rate?.[qid];
 
   $('explorer-detail').innerHTML = `
-    <h2>${qid}${schemaQ ? ` <span class="text-muted" style="font-size:12px;font-weight:400">${schemaQ.text?.slice(0,80)||''}</span>` : ''}</h2>
+    <h2>${esc(qid)}${schemaQ ? ` <span class="text-muted" style="font-size:12px;font-weight:400">${esc(schemaQ.text?.slice(0,80)||'')}</span>` : ''}</h2>
     <div style="margin:.5rem 0 .875rem">
-      ${qdata.n != null ? `<span class="q-stat"><strong>${qdata.n}</strong> answers</span>` : ''}
-      ${qdata.mean != null ? `<span class="q-stat">mean <strong>${qdata.mean}</strong></span>` : ''}
-      ${qdata.median != null ? `<span class="q-stat">median <strong>${qdata.median}</strong></span>` : ''}
-      ${qdata.stdev != null ? `<span class="q-stat">σ <strong>${qdata.stdev}</strong></span>` : ''}
+      ${qdata.n != null ? `<span class="q-stat"><strong>${esc(qdata.n)}</strong> answers</span>` : ''}
+      ${qdata.mean != null ? `<span class="q-stat">mean <strong>${esc(qdata.mean)}</strong></span>` : ''}
+      ${qdata.median != null ? `<span class="q-stat">median <strong>${esc(qdata.median)}</strong></span>` : ''}
+      ${qdata.stdev != null ? `<span class="q-stat">σ <strong>${esc(qdata.stdev)}</strong></span>` : ''}
       ${compRate != null ? `<span class="q-stat">completion <strong>${Math.round(compRate*100)}%</strong></span>` : ''}
     </div>
-    ${schemaQ ? `<p style="font-size:12px;color:var(--muted);margin-bottom:.75rem">Type: <strong>${schemaQ.type}</strong>${schemaQ.skip_if?` · skip_if: ${JSON.stringify(schemaQ.skip_if)}`:''}</p>` : ''}
+    ${schemaQ ? `<p style="font-size:12px;color:var(--muted);margin-bottom:.75rem">Type: <strong>${esc(schemaQ.type)}</strong>${schemaQ.skip_if?` · skip_if: ${esc(JSON.stringify(schemaQ.skip_if))}`:''}</p>` : ''}
     <canvas id="explorer-chart" style="max-height:240px"></canvas>
     ${entries.length ? `
     <table style="margin-top:.875rem">
       <thead><tr><th>Value</th><th>n</th><th>%</th><th style="width:180px"></th></tr></thead>
       <tbody>${entries.map(([k,v])=>`
         <tr>
-          <td>${k.length>40?k.slice(0,38)+'…':k}</td>
-          <td>${v}</td>
+          <td>${esc(k.length>40?k.slice(0,38)+'…':k)}</td>
+          <td>${esc(v)}</td>
           <td>${total>0?Math.round(v/total*100):0}%</td>
           <td><div class="bar-wrap"><div class="bar-fill" style="width:${total>0?Math.round(v/total*100):0}%"></div></div></td>
         </tr>`).join('')}
@@ -710,8 +720,8 @@ function renderPlz() {
     if (!count) continue;
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = `<div class="card-val" style="font-size:1.5rem">${count}</div>
-      <div class="card-lbl">${RES_LABELS[res]}</div>`;
+    card.innerHTML = `<div class="card-val" style="font-size:1.5rem">${esc(count)}</div>
+      <div class="card-lbl">${esc(RES_LABELS[res])}</div>`;
     pc.appendChild(card);
   }
 
@@ -723,12 +733,12 @@ function renderPlz() {
     const covered = b.plzs_covered?.length || 0;
     tbody.insertAdjacentHTML('beforeend', `
       <tr>
-        <td class="monospace"><strong>${b.prefix}</strong></td>
-        <td><span class="badge ${RES_BADGE[b.resolution]}">${RES_LABELS[b.resolution]}</span></td>
-        <td>${b.n}</td>
+        <td class="monospace"><strong>${esc(b.prefix)}</strong></td>
+        <td><span class="badge ${esc(RES_BADGE[b.resolution])}">${esc(RES_LABELS[b.resolution])}</span></td>
+        <td>${esc(b.n)}</td>
         <td>${pct}%</td>
         <td class="text-muted">${covered} PLZ${covered!==1?'s':''}</td>
-        <td><button class="btn btn-sm" onclick="showBundleDetail(${JSON.stringify(b.prefix)})">Detail</button></td>
+        <td><button class="btn btn-sm" onclick="showBundleDetail('${jsq(b.prefix)}')">Detail</button></td>
       </tr>`);
   }
 
@@ -752,8 +762,8 @@ async function showBundleDetail(prefix) {
     const qs = bundle.questions || {};
     const topQ = ['Q029','Q030','Q037','Q038','Q004','Q001','Q002'];
     let html = `<p style="font-size:13px;color:var(--muted);margin-bottom:.875rem">
-      n = ${bundle.n} · resolution = ${RES_LABELS[bundle.resolution]}
-      · PLZs: ${(bundle.plzs_covered||[]).slice(0,10).join(', ')}${(bundle.plzs_covered||[]).length>10?' …':''}
+      n = ${esc(bundle.n)} · resolution = ${esc(RES_LABELS[bundle.resolution])}
+      · PLZs: ${esc((bundle.plzs_covered||[]).slice(0,10).join(', '))}${(bundle.plzs_covered||[]).length>10?' …':''}
     </p>`;
 
     for (const qid of [...topQ, ...Object.keys(qs).filter(q=>!topQ.includes(q)).slice(0,10)]) {
@@ -770,17 +780,17 @@ async function showBundleDetail(prefix) {
       ].filter(Boolean).join(' · ');
 
       html += `<div style="margin-bottom:.5rem">
-        <span class="monospace" style="color:var(--accent);font-size:12px">${qid}</span>
-        <span class="text-muted" style="font-size:11px;margin-left:.5rem">${stats}</span>
+        <span class="monospace" style="color:var(--accent);font-size:12px">${esc(qid)}</span>
+        <span class="text-muted" style="font-size:11px;margin-left:.5rem">${esc(stats)}</span>
         <div style="display:flex;flex-wrap:wrap;gap:.25rem .5rem;margin-top:.25rem">
-          ${entries.map(([k,v])=>`<span style="font-size:12px"><strong>${v}</strong> <span class="text-muted">${k.slice(0,20)}</span></span>`).join('')}
+          ${entries.map(([k,v])=>`<span style="font-size:12px"><strong>${esc(v)}</strong> <span class="text-muted">${esc(k.slice(0,20))}</span></span>`).join('')}
         </div>
       </div>`;
     }
     $('plz-bundle-body').innerHTML = html;
     $('plz-bundle-detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch(e) {
-    $('plz-bundle-body').innerHTML = `<div class="err">Error: ${e.message}</div>`;
+    $('plz-bundle-body').innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
   }
 }
 
@@ -841,21 +851,21 @@ function renderSchema() {
     const div = document.createElement('div');
     div.className = 'section';
     div.innerHTML = `
-      <h2>${sec.id} · ${sec.title}
-        <button class="btn btn-sm" onclick="openAddQuestionInSection('${sec.id}')">+ Question</button>
+      <h2>${esc(sec.id)} · ${esc(sec.title)}
+        <button class="btn btn-sm" onclick="openAddQuestionInSection('${jsq(sec.id)}')">+ Question</button>
       </h2>
-      ${sec.description ? `<p style="font-size:12px;color:var(--muted);margin-bottom:.5rem">${sec.description}</p>` : ''}
+      ${sec.description ? `<p style="font-size:12px;color:var(--muted);margin-bottom:.5rem">${esc(sec.description)}</p>` : ''}
       <table>
         <thead><tr><th>ID</th><th>Text</th><th>Type</th><th>Skip if</th><th></th></tr></thead>
         <tbody>${(sec.questions||[]).map(q=>`
           <tr>
-            <td class="monospace">${q.id}</td>
-            <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${q.text||''}</td>
-            <td><span class="tag" style="background:#f0fdf4;color:#166534">${q.type}</span></td>
-            <td style="font-size:12px;color:var(--muted)">${q.skip_if?`${q.skip_if.q} ${q.skip_if.op} ${JSON.stringify(q.skip_if.val)}`:''}</td>
+            <td class="monospace">${esc(q.id)}</td>
+            <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(q.text||'')}</td>
+            <td><span class="tag" style="background:#f0fdf4;color:#166534">${esc(q.type)}</span></td>
+            <td style="font-size:12px;color:var(--muted)">${q.skip_if?`${esc(q.skip_if.q)} ${esc(q.skip_if.op)} ${esc(JSON.stringify(q.skip_if.val))}`:''}</td>
             <td style="white-space:nowrap">
-              <button class="btn btn-sm" onclick="openEditQuestion('${sec.id}','${q.id}')">Edit</button>
-              <button class="btn btn-sm btn-danger" onclick="deleteQuestion('${sec.id}','${q.id}')">✕</button>
+              <button class="btn btn-sm" onclick="openEditQuestion('${jsq(sec.id)}','${jsq(q.id)}')">Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteQuestion('${jsq(sec.id)}','${jsq(q.id)}')">✕</button>
             </td>
           </tr>`).join('')}
         </tbody>
@@ -1048,6 +1058,12 @@ function saveSection() {
 function generateServerSnippet() {
   if (!SCHEMA) { alert('Load the schema first.'); return; }
   const allQ = SCHEMA.sections.flatMap(s=>s.questions);
+  // The snippet is pasted into server.py: interpolating anything but a plain ID would be code injection.
+  const badIds = allQ.filter(q => typeof q?.id !== 'string' || !/^Q\d{3}$/.test(q.id)).map(q => String(q?.id));
+  if (badIds.length) {
+    alert('Refusing to generate snippet: invalid question IDs: ' + badIds.slice(0,5).join(', '));
+    return;
+  }
   const ids = allQ.map(q=>q.id).sort();
 
   const byType = {};

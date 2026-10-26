@@ -25,6 +25,13 @@ NEWSLETTER_DIR = Path("/var/data/newsletter")
 SUBSCRIBERS_FILE = NEWSLETTER_DIR / "subscribers.ndjson"
 
 
+def csv_safe(value) -> str:
+    """Neutralisiert Zellen, die Tabellenkalkulationen als Formel auslesen (CWE-1236):
+    führende =, +, -, @, Tab oder CR bekommen ein Apostroph vorangestellt."""
+    text = str(value) if value is not None else ""
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
 def load_private_key():
     if not PRIV_KEY_PATH.exists():
         print(f"FEHLER: Private Key nicht gefunden: {PRIV_KEY_PATH}", file=sys.stderr)
@@ -103,10 +110,10 @@ def main():
         for e in entries:
             writer.writerow(
                 {
-                    "email": e.get("email", ""),
-                    "lang": e.get("lang", ""),
-                    "consent_at": e.get("consent_at", ""),
-                    "_stored_at": e.get("_stored_at", ""),
+                    "email": csv_safe(e.get("email", "")),
+                    "lang": csv_safe(e.get("lang", "")),
+                    "consent_at": csv_safe(e.get("consent_at", "")),
+                    "_stored_at": csv_safe(e.get("_stored_at", "")),
                 }
             )
         print(out.getvalue(), end="")

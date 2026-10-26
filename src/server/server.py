@@ -8,6 +8,7 @@ Neu in v4:
   [G] Wert-Validierung: Responses dürfen nur bekannte Typen und Werte enthalten.
 """
 
+import asyncio
 import fcntl
 import hashlib
 import hmac
@@ -36,7 +37,9 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
-from starlette.responses import PlainTextResponse
+from starlette.responses import PlainTextResponse, Response
+
+from survey_options import FREE_TEXT_QUESTIONS, OPTION_MAP, canonical_option
 
 # ── Konfiguration ─────────────────────────────────────────────
 
@@ -140,7 +143,25 @@ except ImportError:
 # solved token in the JSON body under the key "frc-captcha-response".
 
 
-def _verify_captcha(token: str | None, ip: str) -> None:
+_captcha_slots = asyncio.Semaphore(8)  # bound concurrent upstream verifications
+
+
+def _captcha_siteverify(req: urllib.request.Request, ip: str) -> dict:
+    """Blocking upstream call — must only run in a worker thread, never on the event loop."""
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        body = exc.read()
+        try:
+            result = json.loads(body)
+        except Exception:
+            result = {}
+        log.warning("captcha-api-error  ip=%s  status=%s  body=%s", ip, exc.code, body[:200])
+        return result
+
+
+async def _verify_captcha(token: str | None, ip: str) -> None:
     """Raise HTTPException(400) if the captcha token is missing or invalid."""
     if not CAPTCHA_API_KEY:
         return  # dev mode — skip
@@ -160,23 +181,16 @@ def _verify_captcha(token: str | None, ip: str) -> None:
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            result = json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        body = exc.read()
+    async with _captcha_slots:
         try:
-            result = json.loads(body)
-        except Exception:
-            result = {}
-        log.warning("captcha-api-error  ip=%s  status=%s  body=%s", ip, exc.code, body[:200])
-    except Exception as exc:
-        # Network failure — fail open so the server stays usable if FriendlyCaptcha
-        # has an outage. Change to fail closed by raising HTTPException here if
-        # you prefer strict mode.
-        log.error("captcha-network-error  ip=%s  err=%s", ip, exc)
-        _captcha_network_errors.inc()
-        return
+            result = await asyncio.to_thread(_captcha_siteverify, req, ip)
+        except Exception as exc:
+            # Network failure — fail open so the server stays usable if FriendlyCaptcha
+            # has an outage. Change to fail closed by raising HTTPException here if
+            # you prefer strict mode.
+            log.error("captcha-network-error  ip=%s  err=%s", ip, exc)
+            _captcha_network_errors.inc()
+            return
 
     if not result.get("success"):
         errors = result.get("errors", [])
@@ -423,6 +437,7 @@ QUESTION_TYPES: dict[str, str] = {
 
 KA_VALUE = "__ka__"
 MAX_STR_LEN = 2000  # Freitext-Felder
+MAX_CHOICE_STR_LEN = 120  # alle übrigen String-Antworten (Party-/Politiker-Comboboxen)
 
 
 def validate_responses(responses: dict) -> list[str]:
@@ -468,9 +483,16 @@ def validate_responses(responses: dict) -> list[str]:
                 errors.append(f"{qid}: erwartet str, bekam {type(val).__name__}")
             elif len(val) > MAX_STR_LEN:
                 errors.append(f"{qid}: Freitext zu lang ({len(val)} > {MAX_STR_LEN})")
+            # Nur echte Freitextfragen dürfen lang sein; Party-/Politiker-Eingaben bleiben kurz
+            elif qid not in FREE_TEXT_QUESTIONS and len(val) > MAX_CHOICE_STR_LEN:
+                errors.append(f"{qid}: Wert zu lang ({len(val)} > {MAX_CHOICE_STR_LEN})")
             # PLZ-Sonderregel: Q121 muss genau 5 Ziffern sein
             elif qid == "Q121" and not re.fullmatch(r"\d{5}", val):
                 errors.append(f"Q121: ungültige Postleitzahl {val!r}")
+            # Geschlossene Auswahlfragen: nur Schema-Optionen (in allen Sprachen) zulassen,
+            # sonst könnten Angreifer beliebige Strings in die öffentliche Auswertung einschleusen
+            elif qid in OPTION_MAP and val not in OPTION_MAP[qid]:
+                errors.append(f"{qid}: Wert nicht in den Antwortoptionen")
 
         elif qtype == "list":
             if not isinstance(val, list):
@@ -479,6 +501,8 @@ def validate_responses(responses: dict) -> list[str]:
                 errors.append(f"{qid}: Liste zu lang")
             elif not all(isinstance(v, str) and len(v) <= 200 for v in val):
                 errors.append(f"{qid}: Listenwerte ungültig")
+            elif qid in OPTION_MAP and any(v != KA_VALUE and v not in OPTION_MAP[qid] for v in val):
+                errors.append(f"{qid}: Listenwert nicht in den Antwortoptionen")
 
     return errors
 
@@ -624,6 +648,19 @@ def guard_resources() -> None:
         raise HTTPException(503, "Dienst vorübergehend nicht verfügbar")
 
 
+_file_cache: dict[Path, tuple[float, bytes]] = {}
+
+
+def _read_cached(path: Path) -> bytes:
+    """Small static file, re-read only when its mtime changes."""
+    mtime = path.stat().st_mtime
+    hit = _file_cache.get(path)
+    if hit is None or hit[0] != mtime:
+        hit = (mtime, path.read_bytes())
+        _file_cache[path] = hit
+    return hit[1]
+
+
 # ── Endpoint ──────────────────────────────────────────────────
 
 
@@ -664,7 +701,7 @@ async def receive_survey(request: Request) -> JSONResponse:
         raise HTTPException(400, "JSON-Struktur zu komplex")
 
     # Captcha verification (skipped in dev mode if CAPTCHA_API_KEY is unset)
-    _verify_captcha(body.get("frc-captcha-response"), ip)
+    await _verify_captcha(body.get("frc-captcha-response"), ip)
 
     # [F] Schema-Hash prüfen
     client_hash = str(body.get("schema_hash", ""))
@@ -683,6 +720,10 @@ async def receive_survey(request: Request) -> JSONResponse:
         log.warning("validation  ip=%s  errors=%s", ip, val_errors[:3])
         _survey_validation_errors.inc()
         raise HTTPException(422, f"Ungültige Werte: {val_errors[0]}")
+
+    # Übersetzte Optionen auf die deutsche Kanonform abbilden ("Bavaria" -> "Bayern"),
+    # damit Auswertung und k-Anonymität nicht je Sprache zersplittern
+    responses = {qid: canonical_option(qid, val) for qid, val in responses.items()}
 
     safe_id = sanitize_id(str(body.get("id", "")))
     if not safe_id:
@@ -862,7 +903,19 @@ async def admin_page(request: Request) -> FileResponse:
     html = STATIC_DIR / "admin" / "index.html"
     if not html.exists():
         raise HTTPException(404, "Admin-Dashboard nicht deployt (admin/index.html fehlt)")
-    return FileResponse(html, media_type="text/html")
+    # Defense in depth gegen Stored-XSS im Dashboard: selbst injizierter Code darf den Admin-Token
+    # nicht an fremde Hosts senden (connect-src/img-src/form-action auf 'self' begrenzt).
+    return FileResponse(
+        html,
+        media_type="text/html",
+        headers={
+            "Content-Security-Policy": (
+                "default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; "
+                "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+            )
+        },
+    )
 
 
 @app.get("/admin/api/stats")
@@ -877,7 +930,7 @@ async def admin_stats(
     log.info("admin-stats  ip=%s", ip)
     if _aggregator is None:
         raise HTTPException(503, "aggregator.py nicht verfügbar")
-    stats = _aggregator.get_admin_stats(DATA_DIR)
+    stats = await asyncio.to_thread(_aggregator.get_admin_stats, DATA_DIR)
     return JSONResponse({**stats, "newsletter_count": _newsletter_count()})
 
 
@@ -893,7 +946,7 @@ async def admin_export(
     log.info("admin-export  ip=%s", ip)
     if _aggregator is None:
         raise HTTPException(503, "aggregator.py nicht verfügbar")
-    return JSONResponse(_aggregator.get_export_dataset(DATA_DIR))
+    return JSONResponse(await asyncio.to_thread(_aggregator.get_export_dataset, DATA_DIR))
 
 
 @app.post("/admin/api/invalidate-cache")
@@ -922,7 +975,7 @@ async def admin_plz_stats(
     _verify_admin(x_admin_token)
     if _aggregator is None:
         raise HTTPException(503, "aggregator.py nicht verfügbar")
-    data = _aggregator.get_plz_stats(DATA_DIR)
+    data = await asyncio.to_thread(_aggregator.get_plz_stats, DATA_DIR)
     # Strip heavy question data from summary response; client fetches export separately
     summary = {k: v for k, v in data.items() if k != "bundles"}
     summary["bundles"] = [{k: v for k, v in b.items() if k != "questions"} for b in data["bundles"]]
@@ -941,7 +994,7 @@ async def admin_plz_export(
     if _aggregator is None:
         raise HTTPException(503, "aggregator.py nicht verfügbar")
     log.info("admin-plz-export  ip=%s", ip)
-    return JSONResponse(_aggregator.get_plz_export(DATA_DIR))
+    return JSONResponse(await asyncio.to_thread(_aggregator.get_plz_export, DATA_DIR))
 
 
 @app.get("/admin/api/schema")
@@ -960,6 +1013,59 @@ async def admin_get_schema(
     except Exception as exc:
         raise HTTPException(500, f"Schema konnte nicht gelesen werden: {exc}")
     return JSONResponse(schema)
+
+
+_SCHEMA_QTYPES = frozenset(
+    {
+        "radio",
+        "check",
+        "likert5",
+        "slider7",
+        "number",
+        "text",
+        "scale10",
+        "party_single",
+        "party_multi",
+        "politician_single",
+        "plz",
+    }
+)
+_SCHEMA_QID_RE = re.compile(r"Q\d{3}")
+_SCHEMA_SID_RE = re.compile(r"S\d{2,3}")
+
+
+def _validate_schema_doc(schema: dict) -> list[str]:
+    """Form- und Zeichenprüfung des Schemas. IDs landen im Admin-HTML und im
+    generierten server.py-Snippet; sie dürfen nur dem festen Muster entsprechen."""
+    errors: list[str] = []
+    sections = schema.get("sections")
+    if not isinstance(sections, list) or len(sections) > 100:
+        return ["sections muss eine Liste sein"]
+
+    def short_str(v, limit: int) -> bool:
+        return isinstance(v, str) and len(v) <= limit
+
+    for sec in sections:
+        if not isinstance(sec, dict) or not isinstance(sec.get("id"), str) or not _SCHEMA_SID_RE.fullmatch(sec["id"]):
+            return ["Section-ID ungültig (erwartet S01…)"]
+        if not short_str(sec.get("title", ""), 300) or not short_str(sec.get("description", ""), 2000):
+            return [f"{sec['id']}: Titel/Beschreibung ungültig"]
+        questions = sec.get("questions", [])
+        if not isinstance(questions, list) or len(questions) > 500:
+            return [f"{sec['id']}: questions muss eine Liste sein"]
+        for q in questions:
+            if not isinstance(q, dict) or not isinstance(q.get("id"), str) or not _SCHEMA_QID_RE.fullmatch(q["id"]):
+                return [f"{sec['id']}: Fragen-ID ungültig (erwartet Q001…)"]
+            if q.get("type") not in _SCHEMA_QTYPES:
+                return [f"{q['id']}: unbekannter Typ"]
+            if not short_str(q.get("text", ""), 2000):
+                return [f"{q['id']}: Text ungültig"]
+            opts = q.get("opts")
+            if opts is not None and (
+                not isinstance(opts, list) or len(opts) > 200 or not all(short_str(o, 300) for o in opts)
+            ):
+                return [f"{q['id']}: opts ungültig"]
+    return errors
 
 
 @app.put("/admin/api/schema")
@@ -981,6 +1087,9 @@ async def admin_put_schema(
         raise HTTPException(400, "Ungültiges JSON")
     if not isinstance(schema, dict) or "sections" not in schema:
         raise HTTPException(422, "Schema muss ein Objekt mit 'sections' sein")
+    schema_errors = _validate_schema_doc(schema)
+    if schema_errors:
+        raise HTTPException(422, f"Ungültiges Schema: {schema_errors[0]}")
 
     try:
         SCHEMA_FILE.write_text(
@@ -1001,7 +1110,12 @@ async def admin_put_schema(
 
 # ── Newsletter signup ─────────────────────────────────────────
 
-_EMAIL_RE = re.compile(r"[^@\s]{1,64}@[^@\s]{1,255}\.[^@\s]{1,63}", re.ASCII)
+# Bewusst eng: beginnt mit Buchstabe/Ziffer (kein '=', '+', '-', '@' am Anfang -> keine
+# CSV-/Tabellen-Formeln im Export) und lässt keine Quotes, Klammern oder Leerzeichen zu.
+_EMAIL_RE = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._%+\-]{0,63}@(?:[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,24}",
+    re.ASCII,
+)
 _newsletter_lock = Lock()
 
 
@@ -1034,10 +1148,10 @@ async def newsletter_signup(request: Request) -> JSONResponse:
         raise HTTPException(400, "Erwartet ein JSON-Objekt")
 
     # Captcha before any expensive processing
-    _verify_captcha(body.get("frc-captcha-response"), ip)
+    await _verify_captcha(body.get("frc-captcha-response"), ip)
 
     email = body.get("email", "")
-    if not isinstance(email, str) or not _EMAIL_RE.fullmatch(email.strip()):
+    if not isinstance(email, str) or len(email.strip()) > 254 or not _EMAIL_RE.fullmatch(email.strip()):
         raise HTTPException(422, "Ungültige E-Mail-Adresse")
     email = email.strip().lower()
 
@@ -1087,11 +1201,13 @@ async def newsletter_signup(request: Request) -> JSONResponse:
 
 @app.get("/results")
 @app.get("/results/")
-async def results_page() -> FileResponse:
+async def results_page() -> Response:
     html = STATIC_DIR / "results" / "index.html"
     if not html.exists():
         raise HTTPException(404, "Results-Seite nicht deployt (results/index.html fehlt)")
-    return FileResponse(html, media_type="text/html")
+    # Bewusst kein FileResponse: starlette parst dort den Range-Header synchron auf dem Event-Loop
+    # (CVE-2025-62727 und die quadratische Merge-Schleife bis starlette 0.52). Die Seite ist klein.
+    return Response(_read_cached(html), media_type="text/html")
 
 
 @app.get("/results/api/stats")
@@ -1100,7 +1216,10 @@ async def results_stats(request: Request) -> JSONResponse:
         raise HTTPException(429, "Zu viele Anfragen")
     if _aggregator is None:
         raise HTTPException(503, "aggregator.py nicht verfügbar")
-    return JSONResponse(_aggregator.get_public_stats(DATA_DIR))
+    # Rebuild and JSON encoding run in a worker thread (they scale with the record store)
+    # and the encoded bytes are cached, so a request neither blocks the event loop nor re-serializes.
+    body = await asyncio.to_thread(_aggregator.get_public_stats_json, DATA_DIR)
+    return Response(body, media_type="application/json")
 
 
 # ── Prometheus metrics endpoint ───────────────────────────────
