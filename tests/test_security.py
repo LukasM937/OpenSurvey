@@ -221,3 +221,26 @@ def test_plz_export_hides_free_text_and_small_pool(server, agg):
     assert "ethnic-free-text" not in text and "pool-free-text" not in text
     pool = [g for g in export["geographic_groups"] if g["prefix"] == "national_pool"]
     assert not pool or pool[0].get("suppressed") is True
+
+
+# ── admin schema editor ────────────────────────────────────────
+
+
+def test_real_schema_passes_schema_validation(server):
+    schema = json.loads(STRUCTURE_JSON.read_text(encoding="utf-8"))
+    assert server._validate_schema_doc(schema) == []
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda s: s["sections"][0]["questions"][0].update(id='Q001"]);import os#'),
+        lambda s: s["sections"][0].update(id="<img src=x onerror=alert(1)>"),
+        lambda s: s["sections"][0]["questions"][0].update(type="evil"),
+        lambda s: s["sections"][0]["questions"][0].update(opts=["ok", {"x": 1}]),
+    ],
+)
+def test_schema_validation_rejects_injection(server, mutate):
+    schema = json.loads(STRUCTURE_JSON.read_text(encoding="utf-8"))
+    mutate(schema)
+    assert server._validate_schema_doc(schema)

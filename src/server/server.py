@@ -903,7 +903,19 @@ async def admin_page(request: Request) -> FileResponse:
     html = STATIC_DIR / "admin" / "index.html"
     if not html.exists():
         raise HTTPException(404, "Admin-Dashboard nicht deployt (admin/index.html fehlt)")
-    return FileResponse(html, media_type="text/html")
+    # Defense in depth gegen Stored-XSS im Dashboard: selbst injizierter Code darf den Admin-Token
+    # nicht an fremde Hosts senden (connect-src/img-src/form-action auf 'self' begrenzt).
+    return FileResponse(
+        html,
+        media_type="text/html",
+        headers={
+            "Content-Security-Policy": (
+                "default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; "
+                "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+            )
+        },
+    )
 
 
 @app.get("/admin/api/stats")
@@ -1003,6 +1015,59 @@ async def admin_get_schema(
     return JSONResponse(schema)
 
 
+_SCHEMA_QTYPES = frozenset(
+    {
+        "radio",
+        "check",
+        "likert5",
+        "slider7",
+        "number",
+        "text",
+        "scale10",
+        "party_single",
+        "party_multi",
+        "politician_single",
+        "plz",
+    }
+)
+_SCHEMA_QID_RE = re.compile(r"Q\d{3}")
+_SCHEMA_SID_RE = re.compile(r"S\d{2,3}")
+
+
+def _validate_schema_doc(schema: dict) -> list[str]:
+    """Form- und Zeichenprüfung des Schemas. IDs landen im Admin-HTML und im
+    generierten server.py-Snippet; sie dürfen nur dem festen Muster entsprechen."""
+    errors: list[str] = []
+    sections = schema.get("sections")
+    if not isinstance(sections, list) or len(sections) > 100:
+        return ["sections muss eine Liste sein"]
+
+    def short_str(v, limit: int) -> bool:
+        return isinstance(v, str) and len(v) <= limit
+
+    for sec in sections:
+        if not isinstance(sec, dict) or not isinstance(sec.get("id"), str) or not _SCHEMA_SID_RE.fullmatch(sec["id"]):
+            return ["Section-ID ungültig (erwartet S01…)"]
+        if not short_str(sec.get("title", ""), 300) or not short_str(sec.get("description", ""), 2000):
+            return [f"{sec['id']}: Titel/Beschreibung ungültig"]
+        questions = sec.get("questions", [])
+        if not isinstance(questions, list) or len(questions) > 500:
+            return [f"{sec['id']}: questions muss eine Liste sein"]
+        for q in questions:
+            if not isinstance(q, dict) or not isinstance(q.get("id"), str) or not _SCHEMA_QID_RE.fullmatch(q["id"]):
+                return [f"{sec['id']}: Fragen-ID ungültig (erwartet Q001…)"]
+            if q.get("type") not in _SCHEMA_QTYPES:
+                return [f"{q['id']}: unbekannter Typ"]
+            if not short_str(q.get("text", ""), 2000):
+                return [f"{q['id']}: Text ungültig"]
+            opts = q.get("opts")
+            if opts is not None and (
+                not isinstance(opts, list) or len(opts) > 200 or not all(short_str(o, 300) for o in opts)
+            ):
+                return [f"{q['id']}: opts ungültig"]
+    return errors
+
+
 @app.put("/admin/api/schema")
 async def admin_put_schema(
     request: Request,
@@ -1022,6 +1087,9 @@ async def admin_put_schema(
         raise HTTPException(400, "Ungültiges JSON")
     if not isinstance(schema, dict) or "sections" not in schema:
         raise HTTPException(422, "Schema muss ein Objekt mit 'sections' sein")
+    schema_errors = _validate_schema_doc(schema)
+    if schema_errors:
+        raise HTTPException(422, f"Ungültiges Schema: {schema_errors[0]}")
 
     try:
         SCHEMA_FILE.write_text(
