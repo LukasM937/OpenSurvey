@@ -1,4 +1,7 @@
 fastapi>=0.111.0
+# CVE-2025-62727 (FileResponse Range parsing, quadratic); the merge loop stays quadratic
+# through 0.52.x -- 1.0 rewrote it. /results no longer uses FileResponse, this is defence in depth.
+starlette>=1.0.0
 uvicorn[standard]>=0.29.0
 cryptography>=42.0.0
 prometheus-client>=0.20.0

@@ -145,12 +145,18 @@ step_python() {
   info "Deploying server files…"
   cp "${REPO_ROOT}/src/server/server.py"    "${INSTALL_DIR}/server.py"
   cp "${REPO_ROOT}/src/server/aggregator.py" "${INSTALL_DIR}/aggregator.py"
+  cp "${REPO_ROOT}/src/server/survey_options.py" "${INSTALL_DIR}/survey_options.py"
+  cp "${REPO_ROOT}/src/server/allowed_options.json" "${INSTALL_DIR}/allowed_options.json"
   chown "root:${SERVER_USER}" \
     "${INSTALL_DIR}/server.py" \
-    "${INSTALL_DIR}/aggregator.py"
+    "${INSTALL_DIR}/aggregator.py" \
+    "${INSTALL_DIR}/survey_options.py" \
+    "${INSTALL_DIR}/allowed_options.json"
   chmod 440 \
     "${INSTALL_DIR}/server.py" \
-    "${INSTALL_DIR}/aggregator.py"
+    "${INSTALL_DIR}/aggregator.py" \
+    "${INSTALL_DIR}/survey_options.py" \
+    "${INSTALL_DIR}/allowed_options.json"
 
   ok "Python environment ready."
 }
@@ -279,17 +285,21 @@ ${captcha_env}
 
 # --proxy-headers + --forwarded-allow-ips are required so that the real client
 # IP is used for rate limiting; without them X-Forwarded-For is spoofable.
-# --limit-max-requests recycles the worker after N requests to contain leaks.
+# No --limit-max-requests: with a single worker uvicorn exits 0 after N requests
+# and the service would stay down, so anonymous traffic could take it offline.
 ExecStart=${VENV_DIR}/bin/uvicorn server:app \\
     --host 127.0.0.1 \\
     --port ${BACKEND_PORT} \\
     --workers 1 \\
     --proxy-headers \\
-    --forwarded-allow-ips 127.0.0.1 \\
-    --limit-max-requests 10000
+    --forwarded-allow-ips 127.0.0.1
 
-Restart=on-failure
+Restart=always
 RestartSec=5
+
+# Cap memory so an inflated aggregation cache only kills this service, not the host.
+MemoryHigh=512M
+MemoryMax=768M
 
 # ── Systemd hardening ──────────────────────────────────────────
 NoNewPrivileges=yes

@@ -14,18 +14,23 @@ Environment=SURVEY_ALLOWED_ORIGINS=*
 # [A] --proxy-headers + --forwarded-allow-ips ist ZWINGEND erforderlich.
 #     Ohne diese Flags ist X-Forwarded-For fälschbar und Rate Limiting
 #     vollständig umgehbar (siehe SECURITY_AUDIT_FINAL.md, Punkt A).
-#     --limit-max-requests startet den Worker nach N Requests neu
-#     (verhindert schleichende Memory Leaks in uvicorn selbst).
+#     Kein --limit-max-requests: bei --workers 1 beendet sich uvicorn nach N
+#     Requests mit Exit-Code 0 und Restart=on-failure startet nicht neu
+#     -> dauerhafter Ausfall durch anonymen Traffic.
 ExecStart=/opt/survey-server/venv/bin/uvicorn server:app \
     --host 127.0.0.1 \
     --port 8742 \
     --workers 1 \
     --proxy-headers \
-    --forwarded-allow-ips 127.0.0.1 \
-    --limit-max-requests 10000
+    --forwarded-allow-ips 127.0.0.1
 
-Restart=on-failure
+Restart=always
 RestartSec=5
+
+# Speicher begrenzen: ein aufgeblähter Aggregations-Cache soll nur den Dienst
+# (und nicht den ganzen Host per Kernel-OOM) treffen; Restart=always startet neu.
+MemoryHigh=512M
+MemoryMax=768M
 
 # ── Systemd Hardening ─────────────────────────────────────────
 
